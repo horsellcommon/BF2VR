@@ -84,7 +84,7 @@ DWORD WINAPI MainThread(void*) {
     previousFilter = SetUnhandledExceptionFilter(Logging::UnhandledHandler);
     Logging::Log("[CORE] BF2VR improved; offline Arcade only");
     CrashTrace::Start();
-    Logging::Log("[CORE] BF2VR Improved 0.3.0; OpenXR F7 options overlay");
+    Logging::Log("[CORE] Candidate 46; Quest infantry controls");
     Logging::Log("[CORE] Using inherited game offsets with ASLR relocation and page checks; game-build compatibility is not signature-verified");
     wchar_t modulePath[32768]{};
     GetModuleFileNameW(pinned, modulePath, 32768);
@@ -129,6 +129,11 @@ float4 PS(V v):SV_Target{float2 p=(v.uv-.5)/.25+.5;if(any(p<0)||any(p>1))return 
         if (++controlPoll >= 50 || optionsChanged) {
             controlPoll = 0;
             ReadProjectionScale(folder);
+            int grenadeSlot=1;char grenadeTrailing=0;
+            std::ifstream grenadeFile(folder/L"QuestGrenadeSlot.txt");
+            if(!(grenadeFile>>grenadeSlot) || (grenadeFile>>grenadeTrailing) ||
+                grenadeSlot<1 || grenadeSlot>3)grenadeSlot=1;
+            Runtime::grenadeSlot=grenadeSlot;
             ApplyHudScaleFile(folder);
             float sharpness=0.f;char extra=0;
             std::ifstream sharpnessFile(folder/L"EyeSharpness.txt");

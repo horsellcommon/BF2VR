@@ -28,3 +28,21 @@ The corresponding source and pinned dependencies are in `BF2VR-0.3.0-source.zip`
 Original BF2VR by Ethan Porcaro (IfanSnek). Maintenance and packaging used OpenAI Codex. BF2VR is licensed under GPL-3.0-or-later. See `LICENSE` and the dependency notices for third-party attribution.
 
 [Original BF2VR project](https://github.com/IfanSnek/BF2VR)
+
+## Quest controller layout (dev)
+
+This branch adds the Quest infantry layout through the Oculus Touch OpenXR profile and Battlefront's default gamepad controls. Use the default controller layout with sprint set to Toggle.
+
+| Quest control | Infantry action |
+| --- | --- |
+| Left stick / right stick | Move / look |
+| Left trigger / right trigger | Aim / fire |
+| Right A / B | Jump / equipped grenade slot |
+| Left X / Y | Left / right ability |
+| Left stick click | Toggle sprint |
+| Right stick click | Toggle first/third person |
+| Left grip | Reload / vent / interact |
+
+`QuestGrenadeSlot.txt` selects the ability B activates. Use 1 for left, 2 for middle, or 3 for right. The default is 1. The right stick click sends one bounded native hold so Battlefront can distinguish it from a shoulder swap.
+
+The offline tests pass. The Quest runtime bindings and the in-game perspective timing still need a live offline headset check.

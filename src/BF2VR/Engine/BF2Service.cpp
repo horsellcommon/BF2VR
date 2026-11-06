@@ -1,3 +1,4 @@
+#include <QuestGamepad.h>
 // Copyright Ethan Porcaro
 
 // This program is free software: you can redistribute it and/or modify
@@ -207,38 +208,41 @@ void BF2Service::BuildViews(RenderView* view) {
 
 void BF2Service::GamepadUpdate(GamepadState* state) {
     std::lock_guard lock(Runtime::mutex);
-    if (!Runtime::enabled || !OpenXRService::xrRunning) return;
-    if (!isValidPtr(state)) {
+    static PerspectiveClick perspectiveClick;
+    if(!Runtime::enabled || !OpenXRService::xrRunning || !OpenXRService::xrFocused || !isValidPtr(state)) {
+        perspectiveClick.Update(false,false,{});
         return;
     }
+    using Input=ActionsService;
+    const bool active=Input::walkValue.isActive || Input::lookValue.isActive ||
+        Input::triggerValue[0].isActive || Input::triggerValue[1].isActive ||
+        Input::stickClick[0].isActive || Input::stickClick[1].isActive ||
+        Input::jumpValue.isActive || Input::grenadeValue.isActive ||
+        Input::leftAbilityValue.isActive || Input::rightAbilityValue.isActive || Input::gripValue[0].isActive;
+    const auto pressed=[](const XrActionStateBoolean& action){return action.isActive && action.currentState;};
+    const bool perspective=perspectiveClick.Update(Input::stickClick[1].isActive,
+        pressed(Input::stickClick[1]),std::chrono::steady_clock::now());
+    if(!active)return;
 
-    state->bitmask = 0x0000;
-    if (ActionsService::jumpValue.currentState) {
-        state->bitmask |= 0x0020;  // A
-    }
-    if (ActionsService::rollValue.currentState) {
-        state->bitmask |= 0x0080;  // B
-    }
-    if (ActionsService::basicValue.currentState) {
-        state->bitmask |= 0x0040;  // X
-    }
-    if (ActionsService::reloadValue.currentState) {
-        state->bitmask |= 0x0010;  // Y
-    }
-    if (ActionsService::triggerValue[0].currentState > .8f) {
-        state->bitmask |= 0x0400;  // L3
-    }
-    if (ActionsService::gripValue[0].currentState > .8f) {
-        state->bitmask |= 0x10000;  // LB
-    }
-    if (ActionsService::gripValue[1].currentState > .8f) {
-        state->bitmask |= 0x20000;  // RB
-    }
-
-    state->LeftThumb.x = ActionsService::walkValue.currentState.x;
-    state->LeftThumb.y = ActionsService::walkValue.currentState.y;
-    state->RT = ActionsService::triggerValue[1].currentState;
-    state->RightThumb = {ActionsService::lookValue.currentState.x, ActionsService::lookValue.currentState.y};
+    const auto buttons=QuestGamepad::Buttons(pressed(Input::jumpValue),
+        Input::gripValue[0].isActive && Input::gripValue[0].currentState>.8f,
+        pressed(Input::stickClick[0]),perspective,pressed(Input::leftAbilityValue),
+        pressed(Input::rightAbilityValue),pressed(Input::grenadeValue),
+        static_cast<GrenadeSlot>(Runtime::grenadeSlot.load()));
+    state->bitmask=(state->bitmask&~QuestGamepad::Mask)|buttons;
+    state->A=(buttons&QuestGamepad::Jump)?1.f:0.f;
+    state->X=(buttons&QuestGamepad::Reload)?1.f:0.f;
+    state->L3=(buttons&QuestGamepad::Sprint)?1.f:0.f;
+    state->R3=(buttons&QuestGamepad::Perspective)?1.f:0.f;
+    state->LB=(buttons&QuestGamepad::LeftAbility)?1.f:0.f;
+    state->RB=(buttons&QuestGamepad::RightAbility)?1.f:0.f;
+    state->LT=Input::triggerValue[0].isActive?QuestGamepad::Trigger(Input::triggerValue[0].currentState):0.f;
+    state->RT=Input::triggerValue[1].isActive?QuestGamepad::Trigger(Input::triggerValue[1].currentState):0.f;
+    const auto axis=[](const XrActionStateVector2f& stick)->Vec2 {
+        return stick.isActive?Vec2{QuestGamepad::Axis(stick.currentState.x),QuestGamepad::Axis(stick.currentState.y)}:Vec2{};
+    };
+    state->LeftThumb=axis(Input::walkValue);
+    state->RightThumb=axis(Input::lookValue);
 }
 
 namespace {

@@ -1,3 +1,4 @@
+#include <QuestGamepad.h>
 #include <FrameCycle.h>
 #include <Types.h>
 #include <CameraAnchor.h>
@@ -139,6 +140,30 @@ int main() {
         require(eulerFromQuat({0,0,q,q}).x > 1.5f && eulerFromQuat({0,0,-q,q}).x < -1.5f, "Euler singularity signs");
         auto offset = rotateAround({.25f,.2f,-1.f}, {}, 0);
         require(offset.x == .25f && offset.y == .2f && offset.z == -1.f, "relative HUD offset");
+        using Pad=BF2VR::QuestGamepad;
+        using Slot=BF2VR::GrenadeSlot;
+        require(Pad::Buttons(true,true,true,true,true,true,false,Slot::Left)==Pad::Mask,
+                "Quest jump, grip reload, sprint, perspective and both abilities reach the gamepad");
+        require(Pad::Buttons(false,false,false,false,false,false,true,Slot::Left)==Pad::LeftAbility &&
+                Pad::Buttons(false,false,false,false,false,false,true,Slot::Right)==Pad::RightAbility &&
+                Pad::Buttons(false,false,false,false,false,false,true,Slot::Middle)==(Pad::LeftAbility|Pad::RightAbility),
+                "grenade shortcut selects the requested equipped ability slot");
+        require(Pad::Buttons(false,false,false,false,false,false,false,Slot::Left)==0 &&
+                Pad::Trigger(.6f)==.6f && Pad::Trigger(-1.f)==0.f && Pad::Trigger(2.f)==1.f &&
+                Pad::Axis(-.6f)==-.6f && Pad::Axis(std::numeric_limits<float>::quiet_NaN())==0.f,
+                "Quest analog controls retain valid values and sanitize invalid input");
+        using namespace std::chrono_literals;
+        BF2VR::PerspectiveClick viewClick;
+        const auto time=std::chrono::steady_clock::now();
+        require(viewClick.Update(true,true,time) && viewClick.Update(true,false,time+100ms) &&
+                !viewClick.Update(true,false,time+901ms),
+                "brief right stick click becomes a bounded native hold");
+        require(viewClick.Update(true,true,time+1s) && !viewClick.Update(true,true,time+2s) &&
+                !viewClick.Update(true,true,time+3s),
+                "holding the physical stick does not repeat perspective changes");
+        require(!viewClick.Update(false,false,time+3100ms) &&
+                viewClick.Update(true,true,time+3200ms) && !viewClick.Update(false,false,time+3300ms),
+                "loss of controller activity cancels the synthetic hold");
         std::cout << "Core regression checks passed\n";
         return 0;
     } catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
