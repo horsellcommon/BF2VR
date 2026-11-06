@@ -1,10 +1,10 @@
 # BF2VR Improved 0.3.0
 
-An unofficial VR mod for Star Wars Battlefront II (2017), for offline Arcade and Instant Action.
+An unofficial VR mod for Star Wars Battlefront II (2017), for **offline** Arcade and Instant Action. _If you use this mod online they you risk a ban._
 
 ## Requirements and setup
 
-- DirectX 12 off, TAA High, and Borderless window mode.
+- Battlefront II with these settings: DirectX 12 off, TAA High, and Borderless window mode.
 - Microsoft Visual C++ 2015–2022 Redistributable for x64.
 
 Keep the extracted mod files together in their own folder. Start your OpenXR runtime and enter an offline match. Face forward, run `Loader.exe`, and press Enter at its prompt. Press End to disable the mod. Restart Battlefront before loading the DLL again.
