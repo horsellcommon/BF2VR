@@ -1,3 +1,5 @@
+#include <MenuInput.h>
+#include <VrOptions.h>
 #include <QuestGamepad.h>
 // Copyright Ethan Porcaro
 
@@ -231,18 +233,18 @@ void BF2Service::GamepadUpdate(GamepadState* state) {
         static_cast<GrenadeSlot>(Runtime::grenadeSlot.load()));
     state->bitmask=(state->bitmask&~QuestGamepad::Mask)|buttons;
     state->A=(buttons&QuestGamepad::Jump)?1.f:0.f;
-    state->X=(buttons&QuestGamepad::Reload)?1.f:0.f;
+    state->Start=(buttons&QuestGamepad::Pause)?1.f:0.f;
     state->L3=(buttons&QuestGamepad::Sprint)?1.f:0.f;
     state->R3=(buttons&QuestGamepad::Perspective)?1.f:0.f;
     state->LB=(buttons&QuestGamepad::LeftAbility)?1.f:0.f;
     state->RB=(buttons&QuestGamepad::RightAbility)?1.f:0.f;
     state->LT=Input::triggerValue[0].isActive?QuestGamepad::Trigger(Input::triggerValue[0].currentState):0.f;
-    state->RT=Input::triggerValue[1].isActive?QuestGamepad::Trigger(Input::triggerValue[1].currentState):0.f;
+    state->RT=!MenuInput::GameCursorVisible() && !VrOptions::IsVisible() && Input::triggerValue[1].isActive?QuestGamepad::Trigger(Input::triggerValue[1].currentState):0.f;
     const auto axis=[](const XrActionStateVector2f& stick)->Vec2 {
         return stick.isActive?Vec2{QuestGamepad::Axis(stick.currentState.x),QuestGamepad::Axis(stick.currentState.y)}:Vec2{};
     };
     state->LeftThumb=axis(Input::walkValue);
-    state->RightThumb=axis(Input::lookValue);
+    state->RightThumb=Runtime::questNativeLook?axis(Input::lookValue):Vec2{};
 }
 
 namespace {

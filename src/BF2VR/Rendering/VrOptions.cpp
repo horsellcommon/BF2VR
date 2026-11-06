@@ -20,6 +20,7 @@ constexpr std::array options{
     Option{L"Projection render scale",L"XRProjectionScale.txt",1.f,Runtime::maxXrProjectionScale,.05f},
     Option{L"Eye sharpening",L"EyeSharpness.txt",0.f,.5f,.05f},
     Option{L"Gameplay HUD scale",L"HudScale.txt",.25f,1.f,.05f},
+    Option{L"Turn speed",L"TurnSpeed.txt",100.f,2000.f,50.f},
     Option{L"Anchor crosshair and markers",nullptr,0.f,1.f,1.f},
     Option{L"Recenter headset",nullptr,0.f,0.f,0.f}
 };
@@ -39,7 +40,8 @@ float Value(int row) {
     case 2:return Runtime::xrProjectionScale;
     case 3:return Runtime::eyeSharpness;
     case 4:return Runtime::hudScale;
-    case 5:return Runtime::hudAnchorsEnabled?1.f:0.f;
+    case 5:return Runtime::questLookSpeed;
+    case 6:return Runtime::hudAnchorsEnabled?1.f:0.f;
     default:return 0.f;
     }
 }
@@ -47,8 +49,9 @@ bool RefreshTexture(ID3D11DeviceContext* context,int row) {
     std::array<std::wstring,options.size()> lines;
     std::wstring text;
     for(int i=0;i<static_cast<int>(options.size());++i) {
-        auto value=i<5?std::format(L"{:.3f}",Value(i)):
-            i==5?(Value(i)>0?L"On":L"Off"):L"Enter";
+        auto value=i==5?std::format(L"{:.0f}",Value(i)):
+            i<5?std::format(L"{:.3f}",Value(i)):
+            i==6?(Value(i)>0?L"On":L"Off"):L"Enter";
         lines[i]=std::format(L"{}     {}",options[i].label,value);
         if(i==2)lines[i]+=std::format(L"  ({}x{})",OpenXRService::swapchainWidth,OpenXRService::swapchainHeight);
         text+=lines[i];
@@ -88,7 +91,7 @@ bool RefreshTexture(ID3D11DeviceContext* context,int row) {
     for(int i=0;i<static_cast<int>(options.size());++i)
         TextOutW(dc,28,71+i*49,lines[i].data(),static_cast<int>(lines[i].size()));
     constexpr wchar_t footer[]=L"Up / Down: select    Left / Right: change    F7: close";
-    TextOutW(dc,25,426,footer,static_cast<int>(std::size(footer)-1));
+    TextOutW(dc,25,476,footer,static_cast<int>(std::size(footer)-1));
     GdiFlush();
     auto* color=static_cast<uint32_t*>(pixels);
     for(UINT i=0;i<width*height;++i)color[i]|=0xff000000;
@@ -114,11 +117,13 @@ bool VrOptions::Key(UINT message,WPARAM key,LPARAM flags) {
     const int row=selected;
     if(key==VK_UP || key==VK_DOWN)
         selected=(row+static_cast<int>(options.size())+(key==VK_UP?-1:1))%static_cast<int>(options.size());
-    else if(key==VK_RETURN && row==6)recenter=true;
-    else if((key==VK_LEFT || key==VK_RIGHT) && row<6)
+    else if(key==VK_RETURN && row==7)recenter=true;
+    else if((key==VK_LEFT || key==VK_RIGHT) && row<7)
         adjustment=(row+1)*(key==VK_LEFT?-1:1);
     return true;
 }
+
+bool VrOptions::IsVisible() {return visible;}
 
 bool VrOptions::Update() {
     if(recenter.exchange(false)) {
@@ -130,7 +135,7 @@ bool VrOptions::Update() {
     const int row=std::abs(change)-1;
     const auto& option=options[row];
     const float value=std::clamp(Value(row)+(change>0?option.step:-option.step),option.low,option.high);
-    if(row==5) {
+    if(row==6) {
         const auto path=folder/L"EnableHudAnchors.flag";
         if(value>0) {
             std::ofstream out(path,std::ios::app);

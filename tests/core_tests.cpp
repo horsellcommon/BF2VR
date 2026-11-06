@@ -1,3 +1,4 @@
+#include <QuestPointer.h>
 #include <QuestGamepad.h>
 #include <FrameCycle.h>
 #include <Types.h>
@@ -143,7 +144,7 @@ int main() {
         using Pad=BF2VR::QuestGamepad;
         using Slot=BF2VR::GrenadeSlot;
         require(Pad::Buttons(true,true,true,true,true,true,false,Slot::Left)==Pad::Mask,
-                "Quest jump, grip reload, sprint, perspective and both abilities reach the gamepad");
+                "Quest jump, grip menu, sprint, perspective and both abilities reach the gamepad");
         require(Pad::Buttons(false,false,false,false,false,false,true,Slot::Left)==Pad::LeftAbility &&
                 Pad::Buttons(false,false,false,false,false,false,true,Slot::Right)==Pad::RightAbility &&
                 Pad::Buttons(false,false,false,false,false,false,true,Slot::Middle)==(Pad::LeftAbility|Pad::RightAbility),
@@ -152,6 +153,28 @@ int main() {
                 Pad::Trigger(.6f)==.6f && Pad::Trigger(-1.f)==0.f && Pad::Trigger(2.f)==1.f &&
                 Pad::Axis(-.6f)==-.6f && Pad::Axis(std::numeric_limits<float>::quiet_NaN())==0.f,
                 "Quest analog controls retain valid values and sanitize invalid input");
+        BF2VR::QuestPointer pointer;
+        auto sample=pointer.Update({0,0,1,0},true,.25f);
+        require(sample && sample->x==.5f && sample->y==.5f && !sample->click,
+                "opening the menu with the trigger held cannot click");
+        sample=pointer.Update({-.4f,-.2f,.89f,0},false,.25f);
+        require(sample && sample->x>.5f && sample->y<.5f && !sample->click,
+                "controller aim moves the same screen cursor right and up");
+        sample=pointer.Update({-.4f,-.2f,.89f,0},true,.25f);
+        require(sample && sample->click,"trigger clicks once armed by release");
+        pointer.Reset();
+        sample=pointer.Update({0,0,1,0},true,.25f);
+        require(sample && !sample->click,"tracking loss disarms a held trigger");
+        BF2VR::QuestMouseLook mouseLook;
+        auto delta=mouseLook.Update(true,1.f,0.f,.01f,700.f);
+        require(delta.x==7 && delta.y==0,"right stick X turns toward the stick");
+        delta=mouseLook.Update(true,0.f,1.f,.01f,700.f);
+        require(delta.x==0 && delta.y==-7,"upward stick movement looks up");
+        require(mouseLook.Update(true,.1f,0.f,.03f,700.f).x==0 &&
+                mouseLook.Update(false,1.f,0.f,.03f,700.f).x==0,
+                "deadzone and focus loss suppress look input");
+        require(mouseLook.Update(true,1.f,0.f,1.f,700.f).x<=25,
+                "a stalled frame cannot create a large look jump");
         using namespace std::chrono_literals;
         BF2VR::PerspectiveClick viewClick;
         const auto time=std::chrono::steady_clock::now();

@@ -41,8 +41,10 @@ This branch adds the Quest infantry layout through the Oculus Touch OpenXR profi
 | Left X / Y | Left / right ability |
 | Left stick click | Toggle sprint |
 | Right stick click | Toggle first/third person |
-| Left grip | Reload / vent / interact |
+| Left grip | Open pause menu |
 
 `QuestGrenadeSlot.txt` selects the ability B activates. Use 1 for left, 2 for middle, or 3 for right. The default is 1. The right stick click sends one bounded native hold so Battlefront can distinguish it from a shoulder swap.
 
-The offline tests pass. The Quest runtime bindings and the in-game perspective timing still need a live offline headset check.
+In Battlefront's menus, aim the right controller to move the VR software cursor and use the right trigger to click. Point the controller forward as the menu opens to set the pointer centre. F7 uses keyboard navigation and includes a live Turn Speed setting saved in `TurnSpeed.txt`. If that file is absent, an existing `QuestLookSpeed.txt` is still read.
+
+The offline tests pass. In-game Quest input behavior is still being tested.

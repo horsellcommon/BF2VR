@@ -8,16 +8,16 @@ namespace BF2VR {
 enum class GrenadeSlot { Left=1, Middle=2, Right=3 };
 
 struct QuestGamepad {
-    static constexpr uint32_t Jump=0x20, Reload=0x40, Sprint=0x400, Perspective=0x800;
+    static constexpr uint32_t Jump=0x20, Pause=0x2000, Sprint=0x400, Perspective=0x800;
     static constexpr uint32_t LeftAbility=0x10000, RightAbility=0x20000;
-    static constexpr uint32_t Mask=Jump|Reload|Sprint|Perspective|LeftAbility|RightAbility;
-    static uint32_t Buttons(bool jump,bool reload,bool sprint,bool perspective,
+    static constexpr uint32_t Mask=Jump|Pause|Sprint|Perspective|LeftAbility|RightAbility;
+    static uint32_t Buttons(bool jump,bool pause,bool sprint,bool perspective,
                             bool left,bool right,bool grenade,GrenadeSlot slot) {
         if(grenade) {
             left=left || slot!=GrenadeSlot::Right;
             right=right || slot!=GrenadeSlot::Left;
         }
-        return (jump?Jump:0)|(reload?Reload:0)|(sprint?Sprint:0)|(perspective?Perspective:0)|
+        return (jump?Jump:0)|(pause?Pause:0)|(sprint?Sprint:0)|(perspective?Perspective:0)|
             (left?LeftAbility:0)|(right?RightAbility:0);
     }
     static float Trigger(float value) {
@@ -25,6 +25,31 @@ struct QuestGamepad {
     }
     static float Axis(float value) {
         return std::isfinite(value)?std::clamp(value,-1.f,1.f):0.f;
+    }
+};
+
+class QuestMouseLook {
+    float carryX=0.f,carryY=0.f;
+public:
+    struct Delta { int x=0,y=0; };
+    Delta Update(bool allowed,float x,float y,float seconds,float speed) {
+        x=QuestGamepad::Axis(x);
+        y=QuestGamepad::Axis(y);
+        const float length=std::hypot(x,y);
+        constexpr float deadzone=.16f;
+        if(!allowed || length<=deadzone || !std::isfinite(seconds) || seconds<=0.f ||
+            !std::isfinite(speed) || speed<=0.f) {
+            carryX=carryY=0.f;
+            return {};
+        }
+        const float strength=(std::min(length,1.f)-deadzone)/(1.f-deadzone);
+        const float scale=strength*strength*std::min(seconds,.035f)*speed/length;
+        carryX+=x*scale;
+        carryY-=y*scale;
+        const Delta move{static_cast<int>(carryX),static_cast<int>(carryY)};
+        carryX-=static_cast<float>(move.x);
+        carryY-=static_cast<float>(move.y);
+        return move;
     }
 };
 
