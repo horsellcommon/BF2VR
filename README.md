@@ -1,6 +1,6 @@
 # BF2VR Improved 0.3.0
 
-An unofficial VR mod for Star Wars Battlefront II (2017), for **offline** Arcade and Instant Action. _If you use this mod online they you risk a ban._
+An unofficial VR mod for Star Wars Battlefront II (2017), for **offline** Arcade and Instant Action. _If you use this mod online then you risk a ban._
 
 ## Requirements and setup
 
