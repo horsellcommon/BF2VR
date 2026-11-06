@@ -16,9 +16,14 @@
 #include <iostream>
 #include <chrono>
 #include <string>
+#include <mutex>
+#include <filesystem>
+#include <wrl/client.h>
 
 namespace BF2VR {
 void Logging::Log(const std::string& message, int code) {
+    static std::mutex mutex;
+    std::lock_guard lock(mutex);
     // If the log file is not open, open it.
     if (!logFile.is_open()) {
         CHAR my_documents[MAX_PATH];
@@ -28,10 +33,13 @@ void Logging::Log(const std::string& message, int code) {
             return;
         }
 
+        std::error_code error;
+        std::filesystem::create_directories(std::filesystem::path(my_documents) / "BF2VR", error);
         logFile.open(std::string(my_documents) + "\\BF2VR\\BF2VR.txt", std::ios::out | std::ios::app);
         auto timestamp = std::chrono::system_clock::now();
         auto timestamp_t = std::chrono::system_clock::to_time_t(timestamp);
-        logFile << std::endl << "New BF2VR log created on " << std::ctime(&timestamp_t) << std::endl;
+        char timeText[32]{}; ctime_s(timeText, sizeof(timeText), &timestamp_t);
+        logFile << std::endl << "New BF2VR log created on " << timeText << std::endl;
     }
 
     if (code != -99) {
@@ -48,6 +56,7 @@ void Logging::MakeMinidump(EXCEPTION_POINTERS* e) {
     if (hDbgHelp == nullptr) {
         return;
     }
+    struct LibraryGuard { HMODULE module; ~LibraryGuard() { FreeLibrary(module); } } guard{hDbgHelp};
     auto pMiniDumpWriteDump = (decltype(&MiniDumpWriteDump))GetProcAddress(hDbgHelp, "MiniDumpWriteDump");
     if (pMiniDumpWriteDump == nullptr) {
         return;
@@ -94,7 +103,7 @@ void Logging::MakeMinidump(EXCEPTION_POINTERS* e) {
 
     CloseHandle(hFile);
 
-    MessageBox(nullptr, TEXT("BF2VR Crashed. There is a crash dump in the Documents/BF2VR/ folder. The program will now exit."), TEXT("BF2VR"), MB_OK | MB_TOPMOST);
+    if (dumped) OutputDebugStringA("BF2VR: crash dump written to Documents/BF2VR\n");
 
     return;
 }

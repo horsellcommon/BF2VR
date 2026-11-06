@@ -26,9 +26,42 @@
 
 typedef Vec3 Vector3;
 
-static inline bool isValidPtr(PVOID p) {
-    return (p >= (PVOID)0x10000) && (p < ((PVOID)0x000F000000000000)) && p != nullptr &&
-        !IsBadReadPtr(p, sizeof(PVOID));
+inline bool IsReadable(const void* pointer, size_t size) {
+    if (!pointer || !size) return false;
+    auto current = reinterpret_cast<uintptr_t>(pointer);
+    if (current + size < current) return false;
+    const auto end = current + size;
+    while (current < end) {
+        MEMORY_BASIC_INFORMATION info{};
+        if (!VirtualQuery(reinterpret_cast<const void*>(current), &info, sizeof(info)) ||
+            info.State != MEM_COMMIT || (info.Protect & (PAGE_GUARD | PAGE_NOACCESS)) ||
+            !(info.Protect & (PAGE_READONLY | PAGE_READWRITE | PAGE_WRITECOPY | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY))) return false;
+        auto next = reinterpret_cast<uintptr_t>(info.BaseAddress) + info.RegionSize;
+        if (next <= current) return false;
+        current = next;
+    }
+    return true;
+}
+inline bool isValidPtr(void* pointer) { return IsReadable(pointer, sizeof(void*)); }
+template<class T> inline bool isValidPtr(T* pointer) { return IsReadable(pointer, sizeof(T)); }
+template<class T> inline T* ReadPointer(uintptr_t address) {
+    if (!IsReadable(reinterpret_cast<void*>(address), sizeof(T*))) return nullptr;
+    T* value = *reinterpret_cast<T**>(address);
+    return isValidPtr(value) ? value : nullptr;
+}
+inline bool ValidateGameAddresses() {
+    const auto base = reinterpret_cast<uintptr_t>(GetModuleHandleW(nullptr));
+    const auto dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
+    const auto nt = reinterpret_cast<const IMAGE_NT_HEADERS64*>(base + dos->e_lfanew);
+    const auto end = base + nt->OptionalHeader.SizeOfImage;
+    for (auto address : {OFFSETEARLYVIEW, OFFSETMAKEPROJECTION, OFFSETGAMEPADUPDATE, OFFSETPOST}) {
+        MEMORY_BASIC_INFORMATION info{};
+        if (address < base || address >= end || !VirtualQuery(reinterpret_cast<void*>(address), &info, sizeof(info)) ||
+            info.State != MEM_COMMIT || !(info.Protect & (PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY))) return false;
+    }
+    for (auto address : {OFFSETGAMECONTEXT, OFFSETLOCALAIMER, OFFSETWORLDRENDERSETTINGS, OFFSETDXRENDERER, OFFSETGAMERENDERER})
+        if (address < base || address + sizeof(void*) > end || !IsReadable(reinterpret_cast<void*>(address), sizeof(void*))) return false;
+    return true;
 }
 
 ///////////////////////////////////
@@ -47,20 +80,28 @@ class Screen {
 class DXRenderer {
  public:
     static ID3D11Device* getDevice() {
-        DWORD64 offset1 = *reinterpret_cast<DWORD64*>(OFFSETDXRENDERER);
-        return *reinterpret_cast<ID3D11Device**>(offset1 + 0xE98);
+        if (!IsReadable(reinterpret_cast<void*>(OFFSETDXRENDERER), sizeof(uintptr_t))) return nullptr;
+        uintptr_t root = *reinterpret_cast<uintptr_t*>(OFFSETDXRENDERER);
+        if (!root) return nullptr;
+        return ReadPointer<ID3D11Device>(root + 0xE98);
     }
     static ID3D11DeviceContext* getContext() {
-        DWORD64 offset1 = *reinterpret_cast<DWORD64*>(OFFSETDXRENDERER);
-        return *reinterpret_cast<ID3D11DeviceContext**>(offset1 + 0xEA0);
+        if (!IsReadable(reinterpret_cast<void*>(OFFSETDXRENDERER), sizeof(uintptr_t))) return nullptr;
+        uintptr_t root = *reinterpret_cast<uintptr_t*>(OFFSETDXRENDERER);
+        if (!root) return nullptr;
+        return ReadPointer<ID3D11DeviceContext>(root + 0xEA0);
     }
     static IDXGISwapChain* getSwapChain() {
-        DWORD64 offset1 = *reinterpret_cast<DWORD64*>(OFFSETDXRENDERER);
-        return *reinterpret_cast<IDXGISwapChain**>(offset1 + 0x338);
+        if (!IsReadable(reinterpret_cast<void*>(OFFSETDXRENDERER), sizeof(uintptr_t))) return nullptr;
+        uintptr_t root = *reinterpret_cast<uintptr_t*>(OFFSETDXRENDERER);
+        if (!root) return nullptr;
+        return ReadPointer<IDXGISwapChain>(root + 0x338);
     }
     static Screen* getScreen() {
-        DWORD64 offset1 = *reinterpret_cast<DWORD64*>(OFFSETDXRENDERER);
-        return *reinterpret_cast<Screen**>(offset1 + 0xC88);
+        if (!IsReadable(reinterpret_cast<void*>(OFFSETDXRENDERER), sizeof(uintptr_t))) return nullptr;
+        uintptr_t root = *reinterpret_cast<uintptr_t*>(OFFSETDXRENDERER);
+        if (!root) return nullptr;
+        return ReadPointer<Screen>(root + 0xC88);
     }
 };
 

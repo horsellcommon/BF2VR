@@ -21,6 +21,9 @@ class ActionsService {
  public:
     static int Initialize();
     static void SyncActions();
+    static void ResetInput();
+    static void Uninitialize();
+    static inline bool handValid[2]{};
 
     // PrepareActions
     static inline XrActionSet actionSet;

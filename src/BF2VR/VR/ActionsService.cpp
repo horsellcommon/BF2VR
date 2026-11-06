@@ -167,7 +167,7 @@ int ActionsService::Initialize() {
         XrActionCreateInfo actionInfo = { XR_TYPE_ACTION_CREATE_INFO };
         actionInfo.actionType = XR_ACTION_TYPE_VECTOR2F_INPUT;
         actionInfo.countSubactionPaths = 1;
-        actionInfo.subactionPaths = &handPaths[0];
+        actionInfo.subactionPaths = &handPaths[1];
         strcpy_s(actionInfo.actionName, "look");
         strcpy_s(actionInfo.localizedActionName, "Look/Menu");
         xr = xrCreateAction(actionSet, &actionInfo, &lookAction);
@@ -234,13 +234,14 @@ int ActionsService::Initialize() {
     binding.binding = reloadPath;
     bindings.push_back(binding);
 
-    // Rehister bindings
+    bindings.push_back({lookAction, lookPath});
+    // Register bindings
     XrInteractionProfileSuggestedBinding suggestedBindings = { XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING };
     suggestedBindings.interactionProfile = interactionProfilePath;
-    suggestedBindings.countSuggestedBindings = bindings.size();
+    suggestedBindings.countSuggestedBindings = static_cast<uint32_t>(bindings.size());
     suggestedBindings.suggestedBindings = bindings.data();
 
-    xrSuggestInteractionProfileBindings(OpenXRService::xrInstance, &suggestedBindings);
+    xr = xrSuggestInteractionProfileBindings(OpenXRService::xrInstance, &suggestedBindings);
     if (xr != XR_SUCCESS) {
         Logging::Log("[Actions] Failed to suggest bindings", xr);
         return -1;
@@ -292,6 +293,7 @@ void ActionsService::SyncActions() {
         return;
     }
 
+    ResetInput();
     // Sync actions
     XrActiveActionSet activeActionsets = { actionSet, XR_NULL_PATH };
     XrActionsSyncInfo actionsSyncInfo = { XR_TYPE_ACTIONS_SYNC_INFO };
@@ -299,7 +301,7 @@ void ActionsService::SyncActions() {
     actionsSyncInfo.activeActionSets = &activeActionsets;
 
     XrResult xr = xrSyncActions(OpenXRService::xrSession, &actionsSyncInfo);
-    if (xr != XR_SUCCESS && xr != XR_SESSION_NOT_FOCUSED) {
+    if (xr != XR_SUCCESS) {
         return;
     }
 
@@ -312,15 +314,18 @@ void ActionsService::SyncActions() {
             getInfo.subactionPath = handPaths[i];
             xr = xrGetActionStatePose(OpenXRService::xrSession, &getInfo, &pose_state);
             if (xr != XR_SUCCESS) {
-                return;
+                ResetInput(); return;
             }
 
+            if (!pose_state.isActive) continue;
             handLocations[i].type = XR_TYPE_SPACE_LOCATION;
 
             xr = xrLocateSpace(poseActionSpaces[i], OpenXRService::xrSpace, OpenXRService::xrFrameState.predictedDisplayTime, &handLocations[i]);
             if (xr != XR_SUCCESS) {
-                return;
+                ResetInput(); return;
             }
+            const auto flags = handLocations[i].locationFlags;
+            handValid[i] = (flags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT) && (flags & XR_SPACE_LOCATION_POSITION_VALID_BIT);
         }
         {
             // Get controller trigger states
@@ -331,7 +336,7 @@ void ActionsService::SyncActions() {
             getInfo.subactionPath = handPaths[i];
             xr = xrGetActionStateFloat(OpenXRService::xrSession, &getInfo, &triggerValue[i]);
             if (xr != XR_SUCCESS) {
-                return;
+                ResetInput(); return;
             }
         }
         {
@@ -343,7 +348,7 @@ void ActionsService::SyncActions() {
             getInfo.subactionPath = handPaths[i];
             xr = xrGetActionStateFloat(OpenXRService::xrSession, &getInfo, &gripValue[i]);
             if (xr != XR_SUCCESS) {
-                return;
+                ResetInput(); return;
             }
         }
     }
@@ -357,7 +362,7 @@ void ActionsService::SyncActions() {
         getInfo.subactionPath = handPaths[0];
         xr = xrGetActionStateBoolean(OpenXRService::xrSession, &getInfo, &basicValue);
         if (xr != XR_SUCCESS) {
-            return;
+            ResetInput(); return;
         }
     }
 
@@ -370,7 +375,7 @@ void ActionsService::SyncActions() {
         getInfo.subactionPath = handPaths[1];
         xr = xrGetActionStateBoolean(OpenXRService::xrSession, &getInfo, &rollValue);
         if (xr != XR_SUCCESS) {
-            return;
+            ResetInput(); return;
         }
     }
 
@@ -383,7 +388,7 @@ void ActionsService::SyncActions() {
         getInfo.subactionPath = handPaths[1];
         xr = xrGetActionStateBoolean(OpenXRService::xrSession, &getInfo, &jumpValue);
         if (xr != XR_SUCCESS) {
-            return;
+            ResetInput(); return;
         }
     }
 
@@ -396,7 +401,7 @@ void ActionsService::SyncActions() {
         getInfo.subactionPath = handPaths[0];
         xr = xrGetActionStateBoolean(OpenXRService::xrSession, &getInfo, &reloadValue);
         if (xr != XR_SUCCESS) {
-            return;
+            ResetInput(); return;
         }
     }
 
@@ -409,7 +414,7 @@ void ActionsService::SyncActions() {
         getInfo.subactionPath = handPaths[0];
         xr = xrGetActionStateVector2f(OpenXRService::xrSession, &getInfo, &walkValue);
         if (xr != XR_SUCCESS) {
-            return;
+            ResetInput(); return;
         }
     }
 
@@ -419,11 +424,25 @@ void ActionsService::SyncActions() {
 
         XrActionStateGetInfo getInfo = { XR_TYPE_ACTION_STATE_GET_INFO };
         getInfo.action = lookAction;
-        getInfo.subactionPath = handPaths[0];
+        getInfo.subactionPath = handPaths[1];
         xr = xrGetActionStateVector2f(OpenXRService::xrSession, &getInfo, &lookValue);
         if (xr != XR_SUCCESS) {
-            return;
+            ResetInput(); return;
         }
     }
+}
+void ActionsService::ResetInput() {
+    for (int i = 0; i < 2; ++i) {
+        handValid[i] = false; handLocations[i] = {XR_TYPE_SPACE_LOCATION};
+        triggerValue[i] = {XR_TYPE_ACTION_STATE_FLOAT}; gripValue[i] = {XR_TYPE_ACTION_STATE_FLOAT};
+    }
+    basicValue = rollValue = jumpValue = reloadValue = {XR_TYPE_ACTION_STATE_BOOLEAN};
+    walkValue = lookValue = {XR_TYPE_ACTION_STATE_VECTOR2F};
+}
+void ActionsService::Uninitialize() {
+    ResetInput();
+    for (auto& space : poseActionSpaces) { if (space) xrDestroySpace(space); space = XR_NULL_HANDLE; }
+    if (actionSet) xrDestroyActionSet(actionSet);
+    actionSet = XR_NULL_HANDLE;
 }
 }  // namespace BF2VR

@@ -1,75 +1,31 @@
-# BF2VR
-[![](https://img.shields.io/badge/Discord-Testers%20-blueviolet)](https://discord.gg/mrKYwzd3N4)
-### This is a full VR mod for Star Wars: Battlefront II (2017)
-#### Note this is a work-in-progress
-_This is the beta version. The alpha version is archived at [IfanSnek/BF2VR-Alpha](https://github.com/IfanSnek/BF2VR-Alpha/)_
+# BF2VR Improved 0.3.0
 
-## Installation
-Download the ZIP file from the releases page **when it's available.**
+An unofficial Windows x64 VR mod for Star Wars Battlefront II (2017), for offline Arcade and Instant Action. It uses the included native loader and OpenXR.
 
-Extract to a folder, then whitelist that folder in Windows Defender/Antivirus.
+## Requirements and setup
 
-*That's all :)*
+- Star Wars Battlefront II (2017), Windows x64, and the Microsoft Visual C++ 2015–2022 x64 runtime. Previous builds were tested with the Steam executable version 1.0.117.50617 and SteamVR.
+- A connected headset and a configured OpenXR runtime.
+- In Battlefront, set DirectX 12 to Off, TAA to High, and window mode to Borderless.
 
-## Usage
-1) Launch Battlefront II and wait for at least the menu to load. See mandatory settings below.
+Keep the extracted mod files together in their own folder. Start your OpenXR runtime and enter an offline match. Face forward, run `Loader.exe`, and press Enter at its prompt. Press End to disable the mod. Restart Battlefront before loading the DLL again.
 
-2) Enter an **Arcade** match. No starfighters (yet).
+## F7 options overlay
 
-3) Open your OpenXR runtime (Oculus grid area, SteamVR mountains, Virtual Desktop just neads to have VDXR enabled)
+With Battlefront focused, press F7 to open or close the overlay. Use Up/Down to select, Left/Right to change a value, and Enter on Recenter headset. Gameplay continues while the overlay is open.
 
-4) Double click `Loader.exe`. The VR will show the game now, see the controls section.
+The panel adjusts world units per metre, menu size, gameplay HUD size, projection render scale, sharpening, and crosshair and marker anchoring. Changes save alongside the DLL. The starting HUD and menu scale is 25%. Projection scale starts at 1.15× and can request up to 2.0× per dimension. Actual dimensions are shown in the panel and depend on the runtime's limits. If a live resize fails, the mod retains the current images. Higher settings can increase GPU and memory use. This setting scales the OpenXR projection images. Battlefront's own rendering resolution is separate.
 
-5) (Optional) Use the delete key to eject. This will crash the game sometimes but it's worth it if you would need to close the game for some reason anyway.
+## Troubleshooting and removal
 
-### Mandatory settings:
-* DirectX 12 - Off
-* TAA - High (it's disabled anyway but it must be on high)
-* Window mode - borderless
+The local log is in `Documents/BF2VR/BF2VR.txt`. The loader injects a DLL into the running game and security software may flag that behavior. Source is included for review. Treat logs and crash dumps as private before sharing them. To remove the mod, close the game and delete its extracted folder.
 
-### Controls
-*Assumes the equivalent for an Oculus Touch controller.*
+## Source and validation
 
-**Left thumb:** Walk
+The corresponding source and pinned dependencies are in `BF2VR-0.3.0-source.zip`. All four offline regression suites passed, including the OpenXR allocation cap, live fallback, and overlay layer tests. This release's F7 overlay and 2.0× setting still need a live headset check.
 
-**A:** Jump
+## Credits
 
-**B:** Dodge
+Original BF2VR by Ethan Porcaro (IfanSnek). Maintenance and packaging used OpenAI Codex. BF2VR is licensed under GPL-3.0-or-later. See `LICENSE` and the dependency notices for third-party attribution.
 
-**X:** Reload
-
-**Y:** They call it "basic weapon"
-
-*A/B/X/Y buttons are the same as the normal Xbox controls.*
-
-**Left trigger:** Sprint
-
-**Right trigger:** Fire
-
-**Left Grip:** Left ability
-
-**Right Grip:** Right ability
-
-**Left and right grip:** Middle ability
-
-> [!WARNING]  
-> Do not play online. You will likely be banned. And unlike Palpatine, you're not allowed back. You can use [Kyber](https://github.com/ArmchairDevelopers/Kyber) servers though.
-
-## Issues
-
-Upload the `BF2VR.txt` file in `Documents/BF2VR` when you open an issue. If applicable, upload the minidump as well. Please check if an issue exists beforehand, and it would be great if you checked discord as well.
-
-## Contributing
-
-Pull requests are very welcome. Please use Google's C++ style guide. You can download [cpplint](https://pypi.org/project/cpplint/) and run the following in the /src/ directory:
-`cpplint --linelength 1000 --recursive ./src`
-
-## License
-BF2VR is licensed under the GPL-3.0 license (see LICENSE file).
-
-## Legal
-Star Wars: Battlefront II is trademarked by Electronic Arts, which in not affiliated with this project. 
-
-BF2VR is protected by [17 U.S. Code § 1201](https://www.law.cornell.edu/uscode/text/17/1201), which allows reverse engineering of programs for the sole use of interoperability. BF2VR allows Battlefront II with various OpenXR runtimes through the [OpenXR Specification](https://registry.khronos.org/OpenXR/specs/1.0/html/xrspec.html).
-
-> The information acquired through the acts permitted under paragraph (1), and the means permitted under paragraph (2), may be made available to others if the person referred to in paragraph (1) or (2), as the case may be, provides such information or means solely for the purpose of enabling interoperability of an independently created computer program with other programs, and to the extent that doing so does not constitute infringement under this title or violate applicable law other than this section.
+[Original BF2VR project](https://github.com/IfanSnek/BF2VR)

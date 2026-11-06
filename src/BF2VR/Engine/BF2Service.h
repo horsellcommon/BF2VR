@@ -21,8 +21,17 @@ namespace BF2VR {
 class BF2Service {
  public:
     static int Initialize();
+    static bool HudAim(Vec2& output);
+    static bool HudReprojection(float* rows);
     static int Uninitialize();
+    static void RestoreVisualSettings();
+    static void RefreshMainView();
+    static void ResetCameraAnchor(bool recenterOnly=false);
+    static inline std::atomic<RenderView*> cachedMainView{nullptr};
+    static inline uint64_t projectionRevision = 0;
+    static inline int projectionEye = -1;
     static inline Matrix4 viewMatrix;
+    static inline Matrix4 headCenterMatrix;
     static inline Matrix4 projMatrix;
     static inline XINPUT_GAMEPAD gamepad;
     static inline bool inGame = false;
@@ -30,8 +39,10 @@ class BF2Service {
  private:
     static inline GlobalPostProcessSettings* postSettings;
 
-    static inline SafetyHookInline cameraUpdateHook;
-    static RenderView* CameraUpdate(RenderView* a1, RenderView* a2);
+    static inline SafetyHookMid earlyViewHook;
+    static inline SafetyHookInline projectionHook;
+    static RenderView* PrepareCamera(RenderView* view);
+    static Matrix4* ProjectionOverride(RenderView* view, Matrix4* output, void* camera);
 
     static inline SafetyHookMid buildViewsHook;
     static void BuildViews(RenderView* view);

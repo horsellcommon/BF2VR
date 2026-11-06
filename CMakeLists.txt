@@ -1,62 +1,49 @@
 cmake_minimum_required(VERSION 3.26)
+project(BF2VRImproved VERSION 0.3.0 LANGUAGES C CXX)
+if(NOT WIN32 OR NOT MSVC OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+    message(FATAL_ERROR "BF2VR requires Windows, MSVC, and an x64 build")
+endif()
 set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_COMPILER_WORKS 1)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP /EHsc")
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include(FetchContent)
-
-# Safetyhook
-set(SAFETYHOOK_FETCH_ZYDIS ON)
-include(FetchContent)
-FetchContent_Declare(
-        safetyhook
-        GIT_REPOSITORY "https://github.com/cursey/safetyhook.git"
-        GIT_TAG "origin/main"
-)
-FetchContent_MakeAvailable(safetyhook)
-
-
-# OpenXR
-FetchContent_Declare(
-        openxr
-        GIT_REPOSITORY "https://github.com/KhronosGroup/OpenXR-SDK"
-        GIT_TAG "origin/main"
-)
-FetchContent_MakeAvailable(openxr)
-
-# BF2VR
-project(BF2VR)
-add_library(
-        BF2VR MODULE
-        "src/BF2VR/main.cpp"
-        "src/BF2VR/Engine/BF2Service.cpp"
-        "src/BF2VR/Rendering/D3DService.cpp"
-        "src/BF2VR/Utils/Logging.cpp"
-        "src/BF2VR/VR/ActionsService.cpp"
-        "src/BF2VR/VR/OpenXRService.cpp"
-)
-target_include_directories(
-        BF2VR PRIVATE
-        "src/BF2VR"
-        "src/BF2VR/Engine"
-        "src/BF2VR/Rendering"
-        "src/BF2VR/Utils"
-        "src/BF2VR/VR"
-        "${OPENXR_SOURCE_DIR}/include"
-        "${safetyhook_SOURCE_DIR}/include"
-)
-target_link_libraries(
-        BF2VR PRIVATE
-        "openxr_loader"
-        "safetyhook"
-        "d3d11"
-        "d3dcompiler"
-)
+set(SAFETYHOOK_FETCH_ZYDIS ON CACHE BOOL "" FORCE)
+FetchContent_Declare(Zydis GIT_REPOSITORY https://github.com/zyantific/zydis.git GIT_TAG 569320ad3c4856da13b9dbf1f0d9e20bda63870e)
+FetchContent_Declare(safetyhook GIT_REPOSITORY https://github.com/cursey/safetyhook.git GIT_TAG c3f3f306a0f12d1811c0b713ad2ed2a8ddc6cf55)
+set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(BUILD_API_LAYERS OFF CACHE BOOL "" FORCE)
+set(DYNAMIC_LOADER OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(openxr GIT_REPOSITORY https://github.com/KhronosGroup/OpenXR-SDK.git GIT_TAG 781f2eab3698d653c804ecbd11e0aed47eaad1c6)
+FetchContent_MakeAvailable(safetyhook openxr)
+add_library(BF2VR MODULE src/BF2VR/main.cpp src/BF2VR/Engine/BF2Service.cpp src/BF2VR/Rendering/D3DService.cpp src/BF2VR/Rendering/MenuInput.cpp src/BF2VR/Rendering/VrOptions.cpp src/BF2VR/Utils/Logging.cpp src/BF2VR/VR/ActionsService.cpp src/BF2VR/VR/OpenXRService.cpp)
+target_include_directories(BF2VR PRIVATE src/BF2VR src/BF2VR/Engine src/BF2VR/Rendering src/BF2VR/Utils src/BF2VR/VR)
+target_link_libraries(BF2VR PRIVATE openxr_loader safetyhook d3d11 dxgi d3dcompiler shell32 gdi32)
+target_compile_definitions(BF2VR PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+target_compile_options(BF2VR PRIVATE /MP /EHsc /W4)
 set_target_properties(BF2VR PROPERTIES PREFIX "")
-
-# Loader
-project(Loader)
-add_executable(Loader
-        src/Loader/main.cpp
-        src/Loader/Loader.rc
-)
-target_link_libraries(Loader PRIVATE)
+add_executable(Loader src/Loader/main.cpp src/Loader/Loader.rc)
+target_link_libraries(Loader PRIVATE shell32)
+target_compile_definitions(Loader PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+target_compile_options(Loader PRIVATE /EHsc /W4)
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(BF2VRTests tests/core_tests.cpp)
+    target_include_directories(BF2VRTests PRIVATE src/BF2VR/Engine src/BF2VR/Rendering ${openxr_SOURCE_DIR}/include)
+    target_compile_definitions(BF2VRTests PRIVATE NOMINMAX)
+    add_test(NAME CoreRegression COMMAND BF2VRTests)
+    add_executable(XRLifecycleTests tests/xr_lifecycle_tests.cpp src/BF2VR/VR/OpenXRService.cpp)
+    target_include_directories(XRLifecycleTests PRIVATE src/BF2VR src/BF2VR/Engine src/BF2VR/Rendering src/BF2VR/Utils src/BF2VR/VR ${openxr_SOURCE_DIR}/include)
+    target_link_libraries(XRLifecycleTests PRIVATE d3d11 dxgi safetyhook)
+    target_compile_definitions(XRLifecycleTests PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+    add_test(NAME XRLifecycleRegression COMMAND XRLifecycleTests)
+    add_executable(DXGIRegression tests/dxgi_tests.cpp src/BF2VR/Rendering/MenuInput.cpp)
+    target_include_directories(DXGIRegression PRIVATE src/BF2VR/Rendering src/BF2VR/Utils)
+    target_link_libraries(DXGIRegression PRIVATE d3d11 dxgi safetyhook)
+    target_compile_definitions(DXGIRegression PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+    add_test(NAME DXGIRegression COMMAND DXGIRegression)
+    add_executable(FrameBlitRegression tests/frame_blit_tests.cpp)
+    target_include_directories(FrameBlitRegression PRIVATE src/BF2VR/Rendering src/BF2VR/Utils)
+    target_link_libraries(FrameBlitRegression PRIVATE d3d11 dxgi d3dcompiler)
+    target_compile_definitions(FrameBlitRegression PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+    add_test(NAME FrameBlitRegression COMMAND FrameBlitRegression)
+endif()
+install(TARGETS BF2VR Loader RUNTIME DESTINATION . LIBRARY DESTINATION .)

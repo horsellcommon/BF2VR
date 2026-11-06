@@ -15,55 +15,59 @@
 #include <d3d11.h>
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
-#include <atomic>
+#include <array>
 #include <vector>
-#include <map>
-
+#include <FrameCycle.h>
+#include <atomic>
 namespace BF2VR {
-
 class OpenXRService {
  public:
     static int Initialize();
     static void HandleStates();
     static void UpdatePose();
-    static void WaitBeginFrame();
-    static void BeforeDraw();
-    static void AfterDraw();
-    static void EndFrame();
+    static void RecordNativeFov(const XrFovf& fov);
+    static int RenderEye() { return cycle.eye; }
+    static inline uint64_t poseRevision = 0;
+    static bool PrepareDraw();
+    static bool FinishEye();
     static int Uninitialize();
-
-    static inline XrSession xrSession;
-    static inline XrInstance xrInstance;
-    static inline XrFrameState xrFrameState;
-    static inline ID3D11RenderTargetView* uiRTV = nullptr;
-    static inline std::map<uint32_t, std::vector<ID3D11RenderTargetView*>> xrRTVs;
-    static inline uint32_t swapchainImageIndex;
-    static inline uint32_t uiSwapchainImageIndex;
-    static inline XrSpace xrSpace;
-    static inline std::vector<XrView> xrViews;
-
-    static inline bool xrRunning = false;
-    static inline bool xrFocused = false;
-    static inline bool xrExiting = false;
-    static inline bool leftEye = true;
-
-    static inline int swapchainWidth = 0;
-    static inline int swapchainHeight = 0;
-
+    static ID3D11RenderTargetView* EyeTarget();
+    static ID3D11RenderTargetView* UITarget();
+    static inline XrSession xrSession = XR_NULL_HANDLE;
+    static inline XrInstance xrInstance = XR_NULL_HANDLE;
+    static inline XrFrameState xrFrameState{XR_TYPE_FRAME_STATE};
+    static inline XrSpace xrSpace = XR_NULL_HANDLE;
+    static inline bool xrRunning = false, xrFocused = false, xrExiting = false;
+    static inline bool poseValid = false;
+    static inline bool uiLayerEnabled = true;
+    static inline std::atomic_bool renderReady = false;
+    static inline int swapchainWidth = 0, swapchainHeight = 0;
  private:
-    static inline XrPosef hudPose = { {0, 0, 0, 1}, {0, 0, 0} };
-    static inline std::vector<XrSwapchain> xrSwapchains;
-    static inline std::vector<XrViewConfigurationView> xrConfigViews;
-    static inline uint32_t xrViewCount;
-
-    static inline std::vector<int64_t> xrFormats;
-    static inline DXGI_FORMAT  xrFormat;
-    static inline uint32_t xrFormatCount;
-
-    static inline std::vector<XrCompositionLayerProjectionView> xrProjectionViews;
-    static inline XrCompositionLayerQuad xrUIView;
-    static inline uint32_t xrProjectionViewCount;
-    static inline XrEnvironmentBlendMode xrBlend;
+    static bool DestroySwapchains();
+    static bool DestroyChain(XrSwapchain& chain,std::vector<ID3D11RenderTargetView*>& views);
+    static bool CreateChain(int width,int height,XrSwapchain& chain,std::vector<ID3D11RenderTargetView*>& views);
+    static void ApplyProjectionScale();
+    static inline double maxProjectionScale=1.0;
+    static inline float attemptedScale=1.f;
+    static inline int64_t swapchainFormat=0;
+    static inline XrSpace optionsSpace=XR_NULL_HANDLE;
+    static inline bool optionsDrawn=false;
+    static inline int hudWidth=0,hudHeight=0;
+    static bool Check(XrResult result, const char* operation);
+    static bool Acquire(int chain);
+    static bool Release(int chain);
+    static bool EndFrame(bool submit);
+    static inline FrameCycle cycle;
+    static inline std::array<XrFovf,2> nativeFovs{};
+    static inline std::array<bool,2> nativeFovValid{};
+    static inline bool shouldRender = false;
+    static inline std::array<XrView, 2> views;
+    static inline std::array<XrCompositionLayerProjectionView, 2> projectionViews;
+    static inline std::array<XrSwapchain, 3> swapchains{};
+    static inline std::array<std::vector<ID3D11RenderTargetView*>, 3> targets;
+    static inline std::array<uint32_t, 3> imageIndices{};
+    static inline std::array<bool, 3> acquired{}, writable{};
+    static inline XrEnvironmentBlendMode blendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
+    static inline XrCompositionLayerQuad hud{XR_TYPE_COMPOSITION_LAYER_QUAD};
 };
-
-}  // namespace BF2VR
+}

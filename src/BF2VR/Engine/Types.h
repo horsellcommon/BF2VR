@@ -148,16 +148,6 @@ struct Matrix4 {
     Vec4 z;
     Vec4 o;
 
-    Matrix4 operator*(Matrix4 m2) const {
-        Matrix4 m1 = Matrix4(x, y, z, o);
-        m1.x = m1.x * m2.x;
-        m1.y = m1.y * m2.y;
-        m1.z = m1.z * m2.z;
-        m1.o = m1.o * m2.o;
-
-        return m1;
-    }
-
     std::string ToString() {
         return std::format("X={}\nY={}\nZ={}\nO={}", x.toString(), y.toString(), z.toString(), o.toString());
     }
@@ -229,20 +219,40 @@ static inline Matrix4 fromFOV(float l, float r, float u, float d) {
     return matrix;
 }
 
+// The engine converts the generator output's depth after this hook. Preserve
+// its native depth/W terms and change only the asymmetric perspective FOV.
+static inline Matrix4 withXrFov(Matrix4 nativeProjection, const Matrix4& xrProjection) {
+    nativeProjection.x.x = xrProjection.x.x;
+    nativeProjection.y.y = xrProjection.y.y;
+    nativeProjection.z.x = xrProjection.z.x;
+    nativeProjection.z.y = xrProjection.z.y;
+    return nativeProjection;
+}
+
+static inline bool fovFromProjection(const Matrix4& matrix, XrFovf& fov) {
+    if (!std::isfinite(matrix.x.x) || !std::isfinite(matrix.y.y) ||
+        !std::isfinite(matrix.z.x) || !std::isfinite(matrix.z.y) || matrix.x.x<=0 || matrix.y.y<=0) return false;
+    fov.angleLeft=std::atan((matrix.z.x-1.f)/matrix.x.x);
+    fov.angleRight=std::atan((matrix.z.x+1.f)/matrix.x.x);
+    fov.angleDown=std::atan((matrix.z.y-1.f)/matrix.y.y);
+    fov.angleUp=std::atan((matrix.z.y+1.f)/matrix.y.y);
+    return true;
+}
+
 // Converts quats to euler for the Aiming function
 static inline Vec3 eulerFromQuat(Vec4 q) {
     Vec3 v;
 
     float test = q.x * q.y + q.z * q.w;
     if (test > 0.499) {  // singularity at north pole
-        v.x = 2 * atan2(q.x, q.w);  // heading
-        v.y = -3.141592 / 2;  // attitude
+        v.y = 2 * atan2(q.x, q.w);  // heading
+        v.x = 3.141592f / 2;  // attitude
         v.z = 0;  // bank
         return v;
     }
     if (test < -0.499) {  // singularity at south pole
-        v.x = -2 * atan2(q.x, q.w);  // headingq
-        v.y = -3.141592 / 2;  // attitude
+        v.y = -2 * atan2(q.x, q.w);  // heading
+        v.x = -3.141592f / 2;  // attitude
         v.z = 0;  // bank
         return v;
     }

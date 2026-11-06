@@ -5,3 +5,9 @@
 notes
 /scripts/.idea/
 /scripts/dump/*
+
+out/
+.vs/
+*.pdb
+*.dmp
+*.log
