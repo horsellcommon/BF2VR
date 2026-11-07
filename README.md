@@ -25,7 +25,6 @@ Keep the extracted mod files together in their own folder. Start your OpenXR run
 | Left stick click | Toggle sprint |
 | Right stick click | Tap to switch shoulders / hold to switch first or third person |
 | Left grip | Open or close the pause menu |
-| Aim the right controller in Battlefront menus | Move the VR cursor |
 
 Turn Speed defaults to 1500 and can be adjusted in F7.
 
