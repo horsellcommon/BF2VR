@@ -4,6 +4,7 @@
 #include <OpenXRService.h>
 #include <CameraAnchor.h>
 #include <QuestPointer.h>
+#include <QuestGamepad.h>
 #include <MenuCoordinates.h>
 #include <Runtime.h>
 #include <Logging.h>
@@ -27,6 +28,68 @@ void ReleaseQuestClick() {
         PostMessageW(window,WM_LBUTTONUP,0,MAKELPARAM(lastPointer.x,lastPointer.y));
     pointerDown=false;
 }
+#ifndef BF2VR_MENU_INPUT_TEST
+QuestPress pausePress;
+QuestHold perspectiveHold;
+bool aimDown=false;
+class QuestKey {
+    const WORD key;
+    const char* label;
+    bool held=false;
+    std::chrono::steady_clock::time_point release{};
+    void Set(bool down) {
+        INPUT event{};
+        event.type=INPUT_KEYBOARD;
+        event.ki.wScan=static_cast<WORD>(MapVirtualKeyW(key,MAPVK_VK_TO_VSC));
+        if(!event.ki.wScan)return;
+        event.ki.dwFlags=KEYEVENTF_SCANCODE|(down?0:KEYEVENTF_KEYUP);
+        const bool sent=SendInput(1,&event,sizeof(event))==1;
+        if(sent)held=down;
+        if(Runtime::questInputTrace && down)
+            Logging::Log(std::format("[QUEST_INPUT] {} scan-code press {}",label,sent?"sent":"rejected"));
+    }
+public:
+    QuestKey(WORD code,const char* name):key(code),label(name) {}
+    void Hold(bool down) {
+        if(held==down)return;
+        if(!down || (GetForegroundWindow()==window && !(GetAsyncKeyState(key)&0x8000)))Set(down);
+    }
+    void Update(bool active,bool pressed) {
+        const auto now=std::chrono::steady_clock::now();
+        if(held && (!active || now>=release))Set(false);
+        if(active && pressed && !held && GetForegroundWindow()==window && !(GetAsyncKeyState(key)&0x8000)) {
+            Set(true);
+            release=now+std::chrono::milliseconds(50);
+        }
+    }
+};
+QuestKey pauseKey(VK_ESCAPE,"Escape"),perspectiveKey('C',"Perspective");
+void SetQuestAim(bool aim) {
+    if(aim==aimDown)return;
+    INPUT event{};
+    event.type=INPUT_MOUSE;
+    event.mi.dwFlags=aim?MOUSEEVENTF_RIGHTDOWN:MOUSEEVENTF_RIGHTUP;
+    const bool sent=SendInput(1,&event,sizeof(event))==1;
+    if(sent)aimDown=aim;
+    if(Runtime::questInputTrace && sent)Logging::Log(aim?"[QUEST_INPUT] Mouse aim down":"[QUEST_INPUT] Mouse aim up");
+}
+void UpdateQuestMenuAndAim() {
+    const bool active=Runtime::enabled && OpenXRService::xrFocused &&
+        window && GetForegroundWindow()==window && !VrOptions::IsVisible();
+    const auto& grip=ActionsService::gripValue[0];
+    const bool pause=pausePress.Update(active && grip.isActive,grip.currentState>.8f);
+    CURSORINFO cursor{sizeof(CURSORINFO)};
+    const auto& trigger=ActionsService::triggerValue[0];
+    const bool gameplay=active && GetCursorInfo(&cursor) && !(cursor.flags&CURSOR_SHOWING);
+    const bool aim=gameplay && !pause && trigger.isActive && trigger.currentState>(aimDown?.4f:.55f);
+    SetQuestAim(aim);
+    pauseKey.Update(active,pause);
+    const auto& rightClick=ActionsService::stickClick[1];
+    const bool perspective=perspectiveHold.Update(gameplay && !pause && rightClick.isActive,
+        rightClick.currentState!=XR_FALSE);
+    perspectiveKey.Hold(perspective);
+}
+#endif
 uintptr_t imageBegin=0,imageEnd=0;
 bool VisibleGameCursor() {
     if(!window || GetForegroundWindow()!=window)return false;
@@ -88,6 +151,11 @@ void MenuInput::Initialize(HWND h) {
     Logging::Log("[MENU_INPUT] Pointer sources observed; remapping remains opt-in");
 }
 void MenuInput::Shutdown() {
+#ifndef BF2VR_MENU_INPUT_TEST
+    SetQuestAim(false);
+    pauseKey.Update(false,false);perspectiveKey.Hold(false);
+    pausePress.Update(false,false);perspectiveHold.Update(false,false);
+#endif
     ReleaseQuestClick();questPointer.Reset();
     enabled=false;visual=false;ready=false;
     if(window && previous && IsWindow(window) && GetWindowLongPtrW(window,GWLP_WNDPROC)==reinterpret_cast<LONG_PTR>(WindowProcedure))
@@ -103,6 +171,7 @@ void MenuInput::Configure(bool value,float factor) {
 bool MenuInput::GameCursorVisible() { return VisibleGameCursor(); }
 #ifndef BF2VR_MENU_INPUT_TEST
 void MenuInput::UpdateQuestPointer() {
+    UpdateQuestMenuAndAim();
     const auto& trigger=ActionsService::triggerValue[1];
     const bool down=trigger.isActive && trigger.currentState>.7f;
     const bool active=ready && VisibleGameCursor() && !VrOptions::IsVisible() &&

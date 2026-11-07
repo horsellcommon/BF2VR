@@ -142,17 +142,27 @@ int main() {
         auto offset = rotateAround({.25f,.2f,-1.f}, {}, 0);
         require(offset.x == .25f && offset.y == .2f && offset.z == -1.f, "relative HUD offset");
         using Pad=BF2VR::QuestGamepad;
-        using Slot=BF2VR::GrenadeSlot;
-        require(Pad::Buttons(true,true,true,true,true,true,false,Slot::Left)==Pad::Mask,
-                "Quest jump, grip menu, sprint, perspective and both abilities reach the gamepad");
-        require(Pad::Buttons(false,false,false,false,false,false,true,Slot::Left)==Pad::LeftAbility &&
-                Pad::Buttons(false,false,false,false,false,false,true,Slot::Right)==Pad::RightAbility &&
-                Pad::Buttons(false,false,false,false,false,false,true,Slot::Middle)==(Pad::LeftAbility|Pad::RightAbility),
-                "grenade shortcut selects the requested equipped ability slot");
-        require(Pad::Buttons(false,false,false,false,false,false,false,Slot::Left)==0 &&
+        require(Pad::Buttons(true,true,true,true,true)==Pad::Mask,
+                "Quest jump, sprint, crouch and both abilities reach the gamepad");
+        require(Pad::Buttons(false,false,false,false,true)==Pad::Crouch &&
+                Pad::Buttons(false,false,true,true,false)==(Pad::LeftAbility|Pad::RightAbility),
+                "B crouches and X plus Y still sends the middle ability chord");
+        require(Pad::Buttons(false,false,false,false,false)==0 &&
                 Pad::Trigger(.6f)==.6f && Pad::Trigger(-1.f)==0.f && Pad::Trigger(2.f)==1.f &&
                 Pad::Axis(-.6f)==-.6f && Pad::Axis(std::numeric_limits<float>::quiet_NaN())==0.f,
                 "Quest analog controls retain valid values and sanitize invalid input");
+        BF2VR::QuestHold perspective;
+        require(!perspective.Update(true,false) && perspective.Update(true,true) &&
+                perspective.Update(true,true) && !perspective.Update(true,false),
+                "perspective key stays down until the physical stick is released");
+        require(perspective.Update(true,true) && !perspective.Update(false,true) &&
+                !perspective.Update(true,true),"focus loss releases and disarms the perspective key");
+        BF2VR::QuestPress pauseGrip;
+        require(!pauseGrip.Update(true,true) && !pauseGrip.Update(true,false) &&
+                pauseGrip.Update(true,true) && !pauseGrip.Update(true,true),
+                "left grip pause emits one event per press");
+        require(!pauseGrip.Update(false,true) && !pauseGrip.Update(true,true),
+                "holding grip across focus changes cannot open the menu");
         BF2VR::QuestPointer pointer;
         auto sample=pointer.Update({0,0,1,0},true,.25f);
         require(sample && sample->x==.5f && sample->y==.5f && !sample->click,
@@ -175,18 +185,6 @@ int main() {
                 "deadzone and focus loss suppress look input");
         require(mouseLook.Update(true,1.f,0.f,1.f,700.f).x<=25,
                 "a stalled frame cannot create a large look jump");
-        using namespace std::chrono_literals;
-        BF2VR::PerspectiveClick viewClick;
-        const auto time=std::chrono::steady_clock::now();
-        require(viewClick.Update(true,true,time) && viewClick.Update(true,false,time+100ms) &&
-                !viewClick.Update(true,false,time+901ms),
-                "brief right stick click becomes a bounded native hold");
-        require(viewClick.Update(true,true,time+1s) && !viewClick.Update(true,true,time+2s) &&
-                !viewClick.Update(true,true,time+3s),
-                "holding the physical stick does not repeat perspective changes");
-        require(!viewClick.Update(false,false,time+3100ms) &&
-                viewClick.Update(true,true,time+3200ms) && !viewClick.Update(false,false,time+3300ms),
-                "loss of controller activity cancels the synthetic hold");
         std::cout << "Core regression checks passed\n";
         return 0;
     } catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }

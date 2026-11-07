@@ -22,9 +22,10 @@ struct Runtime {
     static inline std::atomic_bool followCharacterCamera = true;
     static constexpr float maxXrProjectionScale=2.f;
     static inline std::atomic<float> xrProjectionScale=1.f;
+    static inline std::atomic_bool questInputTrace=false;
     static inline std::atomic_bool questNativeLook=false;
-    static inline std::atomic<float> questLookSpeed=700.f;
-    static inline std::atomic<int> grenadeSlot=1;
+    static constexpr float defaultQuestTurnSpeed=1500.f;
+    static inline std::atomic<float> questLookSpeed=defaultQuestTurnSpeed;
     static inline std::atomic<float> hudScale=.25f;
     static inline std::atomic<float> eyeSharpness = 0.f;
     static inline std::atomic<float> worldUnitsPerMeter{1.075f};

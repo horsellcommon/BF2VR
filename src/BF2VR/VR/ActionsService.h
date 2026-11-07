@@ -32,7 +32,7 @@ class ActionsService {
     static inline std::array<XrPath, 2> triggerPaths;
     static inline std::array<XrPath, 2> gripPaths;
     static inline XrPath rightAbilityPath;
-    static inline XrPath grenadePath;
+    static inline XrPath crouchPath;
     static inline XrPath jumpPath;
     static inline XrPath leftAbilityPath;
     static inline XrPath walkPath;
@@ -43,7 +43,7 @@ class ActionsService {
     static inline XrAction triggerAction;
     static inline XrAction gripAction;
     static inline XrAction rightAbilityAction;
-    static inline XrAction grenadeAction;
+    static inline XrAction crouchAction;
     static inline XrAction jumpAction;
     static inline XrAction leftAbilityAction;
     static inline XrAction walkAction;
@@ -57,7 +57,7 @@ class ActionsService {
     static inline XrActionStateFloat triggerValue[2];
     static inline XrActionStateFloat gripValue[2];
     static inline XrActionStateBoolean rightAbilityValue;
-    static inline XrActionStateBoolean grenadeValue;
+    static inline XrActionStateBoolean crouchValue;
     static inline XrActionStateBoolean jumpValue;
     static inline XrActionStateBoolean leftAbilityValue;
 

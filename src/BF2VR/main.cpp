@@ -84,7 +84,7 @@ DWORD WINAPI MainThread(void*) {
     previousFilter = SetUnhandledExceptionFilter(Logging::UnhandledHandler);
     Logging::Log("[CORE] BF2VR improved; offline Arcade only");
     CrashTrace::Start();
-    Logging::Log("[CORE] Candidate 48; Quest menu pointer and Turn Speed");
+    Logging::Log("[CORE] Candidate 52; crouch and held perspective");
     Logging::Log("[CORE] Using inherited game offsets with ASLR relocation and page checks; game-build compatibility is not signature-verified");
     wchar_t modulePath[32768]{};
     GetModuleFileNameW(pinned, modulePath, 32768);
@@ -93,6 +93,7 @@ DWORD WINAPI MainThread(void*) {
     Runtime::desktopAuditOnly=GetFileAttributesW((folder/L"DesktopHudAudit.flag").c_str())!=INVALID_FILE_ATTRIBUTES;
     Runtime::hudAnchorsEnabled=GetFileAttributesW((folder/L"EnableHudAnchors.flag").c_str())!=INVALID_FILE_ATTRIBUTES;
     ReadProjectionScale(folder);
+    Runtime::questInputTrace=GetFileAttributesW((folder/L"QuestInputTrace.flag").c_str())!=INVALID_FILE_ATTRIBUTES;
     bool failed=false;
     if(Runtime::desktopAuditOnly) {
         Runtime::cameraEnabled=false;Runtime::visualEnabled=false;Runtime::poseEnabled=false;
@@ -129,17 +130,12 @@ float4 PS(V v):SV_Target{float2 p=(v.uv-.5)/.25+.5;if(any(p<0)||any(p>1))return 
         if (++controlPoll >= 50 || optionsChanged) {
             controlPoll = 0;
             ReadProjectionScale(folder);
-            int grenadeSlot=1;char grenadeTrailing=0;
-            std::ifstream grenadeFile(folder/L"QuestGrenadeSlot.txt");
-            if(!(grenadeFile>>grenadeSlot) || (grenadeFile>>grenadeTrailing) ||
-                grenadeSlot<1 || grenadeSlot>3)grenadeSlot=1;
-            Runtime::grenadeSlot=grenadeSlot;
             Runtime::questNativeLook=GetFileAttributesW((folder/L"QuestNativeLook.flag").c_str())!=INVALID_FILE_ATTRIBUTES;
-            float lookSpeed=700.f;char lookTrailing=0;
+            float lookSpeed=Runtime::defaultQuestTurnSpeed;char lookTrailing=0;
             std::ifstream lookFile(folder/L"TurnSpeed.txt");
             if(!lookFile)lookFile.open(folder/L"QuestLookSpeed.txt");
             if(!(lookFile>>lookSpeed) || (lookFile>>lookTrailing) || !std::isfinite(lookSpeed) ||
-                lookSpeed<100.f || lookSpeed>2000.f)lookSpeed=700.f;
+                lookSpeed<100.f || lookSpeed>2000.f)lookSpeed=Runtime::defaultQuestTurnSpeed;
             Runtime::questLookSpeed=lookSpeed;
             ApplyHudScaleFile(folder);
             float sharpness=0.f;char extra=0;

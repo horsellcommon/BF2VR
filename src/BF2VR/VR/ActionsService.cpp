@@ -14,6 +14,8 @@
 #include <OpenXRService.h>
 #include <vector>
 #include <Logging.h>
+#include <Runtime.h>
+#include <format>
 
 namespace BF2VR {
 int ActionsService::Initialize() {
@@ -113,18 +115,18 @@ int ActionsService::Initialize() {
         }
     }
 
-    // Right B activates the equipped grenade ability slot.
-    xrStringToPath(OpenXRService::xrInstance, "/user/hand/right/input/b/click", &grenadePath);
+    // Right B toggles crouch.
+    xrStringToPath(OpenXRService::xrInstance, "/user/hand/right/input/b/click", &crouchPath);
     {
         XrActionCreateInfo actionInfo = { XR_TYPE_ACTION_CREATE_INFO };
         actionInfo.actionType = XR_ACTION_TYPE_BOOLEAN_INPUT;
         actionInfo.countSubactionPaths = 1;
         actionInfo.subactionPaths = &handPaths[1];
         strcpy_s(actionInfo.actionName, "roll");
-        strcpy_s(actionInfo.localizedActionName, "Grenade Ability");
-        xr = xrCreateAction(actionSet, &actionInfo, &grenadeAction);
+        strcpy_s(actionInfo.localizedActionName, "Crouch");
+        xr = xrCreateAction(actionSet, &actionInfo, &crouchAction);
         if (xr != XR_SUCCESS) {
-            Logging::Log("[Actions] Failed to create action for grenade ability", xr);
+            Logging::Log("[Actions] Failed to create action for crouch", xr);
             return -1;
         }
     }
@@ -236,8 +238,8 @@ int ActionsService::Initialize() {
     binding.binding = walkPath;
     bindings.push_back(binding);
 
-    binding.action = grenadeAction;
-    binding.binding = grenadePath;
+    binding.action = crouchAction;
+    binding.binding = crouchPath;
     bindings.push_back(binding);
 
     binding.action = jumpAction;
@@ -387,12 +389,12 @@ void ActionsService::SyncActions() {
 
     {
         // Get grenade button state
-        grenadeValue.type = XR_TYPE_ACTION_STATE_BOOLEAN;
+        crouchValue.type = XR_TYPE_ACTION_STATE_BOOLEAN;
 
         XrActionStateGetInfo getInfo = { XR_TYPE_ACTION_STATE_GET_INFO };
-        getInfo.action = grenadeAction;
+        getInfo.action = crouchAction;
         getInfo.subactionPath = handPaths[1];
-        xr = xrGetActionStateBoolean(OpenXRService::xrSession, &getInfo, &grenadeValue);
+        xr = xrGetActionStateBoolean(OpenXRService::xrSession, &getInfo, &crouchValue);
         if (xr != XR_SUCCESS) {
             ResetInput(); return;
         }
@@ -449,6 +451,20 @@ void ActionsService::SyncActions() {
             ResetInput(); return;
         }
     }
+    if(Runtime::questInputTrace) {
+        static unsigned previous=0;
+        const auto click=[](const XrActionStateBoolean& state){return state.isActive && state.currentState;};
+        const unsigned state=(gripValue[0].isActive && gripValue[0].currentState>.8f ? 1u:0u) |
+            (gripValue[1].isActive && gripValue[1].currentState>.8f ? 2u:0u) |
+            (click(stickClick[1])?4u:0u) | (click(crouchValue)?8u:0u) |
+            (triggerValue[0].isActive && triggerValue[0].currentState>.55f?16u:0u);
+        if(state!=previous) {
+            previous=state;
+            Logging::Log(std::format("[QUEST_INPUT] LGrip={} RGrip={} RStickClick={} B={} LT={} look=({:.2f},{:.2f})",
+                (state&1)!=0,(state&2)!=0,(state&4)!=0,(state&8)!=0,(state&16)!=0,
+                lookValue.currentState.x,lookValue.currentState.y));
+        }
+    }
 }
 void ActionsService::ResetInput() {
     for (int i = 0; i < 2; ++i) {
@@ -456,7 +472,7 @@ void ActionsService::ResetInput() {
         handValid[i] = false; handLocations[i] = {XR_TYPE_SPACE_LOCATION};
         triggerValue[i] = {XR_TYPE_ACTION_STATE_FLOAT}; gripValue[i] = {XR_TYPE_ACTION_STATE_FLOAT};
     }
-    rightAbilityValue = grenadeValue = jumpValue = leftAbilityValue = {XR_TYPE_ACTION_STATE_BOOLEAN};
+    rightAbilityValue = crouchValue = jumpValue = leftAbilityValue = {XR_TYPE_ACTION_STATE_BOOLEAN};
     walkValue = lookValue = {XR_TYPE_ACTION_STATE_VECTOR2F};
 }
 void ActionsService::Uninitialize() {
