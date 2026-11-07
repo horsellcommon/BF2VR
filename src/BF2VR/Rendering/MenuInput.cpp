@@ -1,5 +1,10 @@
 #include <MenuInput.h>
 #include <VrOptions.h>
+#include <ActionsService.h>
+#include <OpenXRService.h>
+#include <CameraAnchor.h>
+#include <QuestPointer.h>
+#include <QuestGamepad.h>
 #include <MenuCoordinates.h>
 #include <Runtime.h>
 #include <Logging.h>
@@ -15,6 +20,76 @@ SafetyHookInline cursorHook;
 std::atomic_bool ready=false,enabled=false,visual=false;
 std::atomic<float> scale{.5f};
 std::atomic_uint64_t cursorReads=0,mouseMessages=0,mapped=0;
+QuestPointer questPointer;
+POINT lastPointer{};
+bool pointerDown=false;
+void ReleaseQuestClick() {
+    if(pointerDown && window && IsWindow(window))
+        PostMessageW(window,WM_LBUTTONUP,0,MAKELPARAM(lastPointer.x,lastPointer.y));
+    pointerDown=false;
+}
+#ifndef BF2VR_MENU_INPUT_TEST
+QuestPress pausePress;
+QuestHold perspectiveHold;
+bool aimDown=false;
+class QuestKey {
+    const WORD key;
+    const char* label;
+    bool held=false;
+    std::chrono::steady_clock::time_point release{};
+    void Set(bool down) {
+        INPUT event{};
+        event.type=INPUT_KEYBOARD;
+        event.ki.wScan=static_cast<WORD>(MapVirtualKeyW(key,MAPVK_VK_TO_VSC));
+        if(!event.ki.wScan)return;
+        event.ki.dwFlags=KEYEVENTF_SCANCODE|(down?0:KEYEVENTF_KEYUP);
+        const bool sent=SendInput(1,&event,sizeof(event))==1;
+        if(sent)held=down;
+        if(Runtime::questInputTrace && down)
+            Logging::Log(std::format("[QUEST_INPUT] {} scan-code press {}",label,sent?"sent":"rejected"));
+    }
+public:
+    QuestKey(WORD code,const char* name):key(code),label(name) {}
+    void Hold(bool down) {
+        if(held==down)return;
+        if(!down || (GetForegroundWindow()==window && !(GetAsyncKeyState(key)&0x8000)))Set(down);
+    }
+    void Update(bool active,bool pressed) {
+        const auto now=std::chrono::steady_clock::now();
+        if(held && (!active || now>=release))Set(false);
+        if(active && pressed && !held && GetForegroundWindow()==window && !(GetAsyncKeyState(key)&0x8000)) {
+            Set(true);
+            release=now+std::chrono::milliseconds(50);
+        }
+    }
+};
+QuestKey pauseKey(VK_ESCAPE,"Escape"),perspectiveKey('C',"Perspective");
+void SetQuestAim(bool aim) {
+    if(aim==aimDown)return;
+    INPUT event{};
+    event.type=INPUT_MOUSE;
+    event.mi.dwFlags=aim?MOUSEEVENTF_RIGHTDOWN:MOUSEEVENTF_RIGHTUP;
+    const bool sent=SendInput(1,&event,sizeof(event))==1;
+    if(sent)aimDown=aim;
+    if(Runtime::questInputTrace && sent)Logging::Log(aim?"[QUEST_INPUT] Mouse aim down":"[QUEST_INPUT] Mouse aim up");
+}
+void UpdateQuestMenuAndAim() {
+    const bool active=Runtime::enabled && OpenXRService::xrFocused &&
+        window && GetForegroundWindow()==window && !VrOptions::IsVisible();
+    const auto& grip=ActionsService::gripValue[0];
+    const bool pause=pausePress.Update(active && grip.isActive,grip.currentState>.8f);
+    CURSORINFO cursor{sizeof(CURSORINFO)};
+    const auto& trigger=ActionsService::triggerValue[0];
+    const bool gameplay=active && GetCursorInfo(&cursor) && !(cursor.flags&CURSOR_SHOWING);
+    const bool aim=gameplay && !pause && trigger.isActive && trigger.currentState>(aimDown?.4f:.55f);
+    SetQuestAim(aim);
+    pauseKey.Update(active,pause);
+    const auto& rightClick=ActionsService::stickClick[1];
+    const bool perspective=perspectiveHold.Update(gameplay && !pause && rightClick.isActive,
+        rightClick.currentState!=XR_FALSE);
+    perspectiveKey.Hold(perspective);
+}
+#endif
 uintptr_t imageBegin=0,imageEnd=0;
 bool VisibleGameCursor() {
     if(!window || GetForegroundWindow()!=window)return false;
@@ -76,6 +151,12 @@ void MenuInput::Initialize(HWND h) {
     Logging::Log("[MENU_INPUT] Pointer sources observed; remapping remains opt-in");
 }
 void MenuInput::Shutdown() {
+#ifndef BF2VR_MENU_INPUT_TEST
+    SetQuestAim(false);
+    pauseKey.Update(false,false);perspectiveKey.Hold(false);
+    pausePress.Update(false,false);perspectiveHold.Update(false,false);
+#endif
+    ReleaseQuestClick();questPointer.Reset();
     enabled=false;visual=false;ready=false;
     if(window && previous && IsWindow(window) && GetWindowLongPtrW(window,GWLP_WNDPROC)==reinterpret_cast<LONG_PTR>(WindowProcedure))
         SetWindowLongPtrW(window,GWLP_WNDPROC,reinterpret_cast<LONG_PTR>(previous.load()));
@@ -87,6 +168,35 @@ void MenuInput::Configure(bool value,float factor) {
     if(!value)visual=false;
     if(enabled.exchange(value)!=value)Logging::Log(value?"[MENU_INPUT] Scaled menus requested; waiting for verified pointer activity":"[MENU_INPUT] Native menu size/input restored");
 }
+bool MenuInput::GameCursorVisible() { return VisibleGameCursor(); }
+#ifndef BF2VR_MENU_INPUT_TEST
+void MenuInput::UpdateQuestPointer() {
+    UpdateQuestMenuAndAim();
+    const auto& trigger=ActionsService::triggerValue[1];
+    const bool down=trigger.isActive && trigger.currentState>.7f;
+    const bool active=ready && VisibleGameCursor() && !VrOptions::IsVisible() &&
+        OpenXRService::xrFocused && ActionsService::handValid[1];
+    if(!active) {ReleaseQuestClick();questPointer.Reset();lastPointer={-1,-1};return;}
+
+    XrView view{XR_TYPE_VIEW};
+    view.pose=ActionsService::handLocations[1].pose;
+    const auto hand=fromOpenXR(view);
+    if(!ValidRigid(hand)) {ReleaseQuestClick();questPointer.Reset();lastPointer={-1,-1};return;}
+    const auto pointer=questPointer.Update(hand.z,down,scale.load());
+    if(!pointer)return;
+    RECT client{};
+    if(!GetClientRect(window,&client) || client.right<=0 || client.bottom<=0)return;
+    POINT local{static_cast<LONG>(pointer->x*client.right),static_cast<LONG>(pointer->y*client.bottom)};
+    POINT screen=local;
+    if(!ClientToScreen(window,&screen) || GetForegroundWindow()!=window)return;
+    const bool moved=local.x!=lastPointer.x || local.y!=lastPointer.y;
+    if(moved && !SetCursorPos(screen.x,screen.y)) {ReleaseQuestClick();return;}
+    lastPointer=local;
+    if(pointer->click && !pointerDown)
+        pointerDown=PostMessageW(window,WM_LBUTTONDOWN,MK_LBUTTON,MAKELPARAM(lastPointer.x,lastPointer.y))!=FALSE;
+    if(!pointer->click)ReleaseQuestClick();
+}
+#endif
 bool MenuInput::CanScaleMenu() { return ready && enabled && VisibleGameCursor() && (cursorReads.load()>0||mouseMessages.load()>0); }
 bool MenuInput::PhysicalCursor(float* values) {
     values[0]=values[1]=-1.f;values[2]=values[3]=0;

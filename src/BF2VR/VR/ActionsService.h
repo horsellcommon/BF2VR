@@ -31,20 +31,21 @@ class ActionsService {
     static inline std::array<XrPath, 2> handPaths;
     static inline std::array<XrPath, 2> triggerPaths;
     static inline std::array<XrPath, 2> gripPaths;
-    static inline XrPath basicPath;
-    static inline XrPath rollPath;
+    static inline XrPath rightAbilityPath;
+    static inline XrPath crouchPath;
     static inline XrPath jumpPath;
-    static inline XrPath reloadPath;
+    static inline XrPath leftAbilityPath;
     static inline XrPath walkPath;
     static inline XrPath lookPath;
 
+    static inline XrAction stickClickAction;
     static inline XrAction poseAction;
     static inline XrAction triggerAction;
     static inline XrAction gripAction;
-    static inline XrAction basicAction;
-    static inline XrAction rollAction;
+    static inline XrAction rightAbilityAction;
+    static inline XrAction crouchAction;
     static inline XrAction jumpAction;
-    static inline XrAction reloadAction;
+    static inline XrAction leftAbilityAction;
     static inline XrAction walkAction;
     static inline XrAction lookAction;
 
@@ -52,12 +53,13 @@ class ActionsService {
 
     // Action values
     static inline XrSpaceLocation handLocations[2];
+    static inline XrActionStateBoolean stickClick[2];
     static inline XrActionStateFloat triggerValue[2];
     static inline XrActionStateFloat gripValue[2];
-    static inline XrActionStateBoolean basicValue;
-    static inline XrActionStateBoolean rollValue;
+    static inline XrActionStateBoolean rightAbilityValue;
+    static inline XrActionStateBoolean crouchValue;
     static inline XrActionStateBoolean jumpValue;
-    static inline XrActionStateBoolean reloadValue;
+    static inline XrActionStateBoolean leftAbilityValue;
 
     static inline XrActionStateVector2f walkValue;
     static inline XrActionStateVector2f lookValue;

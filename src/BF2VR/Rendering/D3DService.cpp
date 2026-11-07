@@ -1,3 +1,6 @@
+#include <QuestGamepad.h>
+#include <VrOptions.h>
+#include <ActionsService.h>
 // Copyright Ethan Porcaro
 
 // This program is free software: you can redistribute it and/or modify
@@ -610,6 +613,43 @@ void D3DService::RequestStereoCapture(const std::filesystem::path& directory) {
     captureDirectory=directory; capturePending=true; captureMask=0;
     Logging::Log("[STEREO_CAPTURE] Requested one pair; readback will briefly stall, disregard timing windows");
 }
+namespace {
+void ApplyQuestLook(HWND window) {
+    static QuestMouseLook look;
+    static auto previous=Timing::Clock::now();
+    const auto now=Timing::Clock::now();
+    const float elapsed=std::chrono::duration<float>(now-previous).count();
+    previous=now;
+    const auto& stick=ActionsService::lookValue;
+    CURSORINFO cursor{sizeof(CURSORINFO)};
+    const bool focused=window && GetForegroundWindow()==window;
+    const bool gameplay=focused && !VrOptions::IsVisible() && GetCursorInfo(&cursor) &&
+        !(cursor.flags&CURSOR_SHOWING);
+    const bool active=OpenXRService::xrFocused && OpenXRService::poseValid && stick.isActive;
+    const bool native=Runtime::questNativeLook;
+    const auto move=look.Update(active && gameplay && !native,
+        stick.currentState.x,stick.currentState.y,elapsed,Runtime::questLookSpeed);
+    static bool nativeReported=false,mouseReported=false;
+    if(active && gameplay && native && !nativeReported &&
+        std::hypot(stick.currentState.x,stick.currentState.y)>.16f) {
+        nativeReported=true;
+        Logging::Log("[QUEST_LOOK] OpenXR right stick reached native gamepad route");
+    }
+    if((move.x || move.y) && GetForegroundWindow()==window) {
+        INPUT input{};
+        input.type=INPUT_MOUSE;
+        input.mi.dx=move.x;input.mi.dy=move.y;
+        input.mi.dwFlags=MOUSEEVENTF_MOVE;
+        const bool sent=SendInput(1,&input,sizeof(input))==1;
+        if(!mouseReported) {
+            mouseReported=true;
+            Logging::Log(sent?"[QUEST_LOOK] OpenXR right stick sent relative look input":
+                "[QUEST_LOOK] Windows rejected relative look input");
+        }
+    }
+}
+}
+
 HRESULT D3DService::PresentDetour(IDXGISwapChain* swapChain, UINT interval, UINT flags) {
     // Ignore other swapchains: the methods are shared across D3D11 objects.
     if (flags & DXGI_PRESENT_TEST) return presentHook.call<HRESULT>(swapChain, interval, flags);
@@ -635,6 +675,8 @@ HRESULT D3DService::PresentDetour(IDXGISwapChain* swapChain, UINT interval, UINT
             }
             if(!Runtime::desktopAuditOnly) {
             BF2Service::RefreshMainView();
+            MenuInput::UpdateQuestPointer();
+            ApplyQuestLook(gameWindow);
             RestoreUITargets();
             OpenXRService::HandleStates();
             if (!OpenXRService::xrExiting) {

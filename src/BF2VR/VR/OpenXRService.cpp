@@ -265,7 +265,7 @@ bool OpenXRService::PrepareDraw() {
         if(optionsDrawn) {
             hud.space=optionsSpace;
             hud.pose={{0,0,0,1},{0,0,-1.15f}};
-            hud.size={.86f,.632f};
+            hud.size={.86f,.86f*VrOptions::Height/VrOptions::Width};
             hud.subImage.imageRect.extent={panelWidth,panelHeight};
         }
     }

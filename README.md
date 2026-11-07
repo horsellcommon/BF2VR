@@ -9,6 +9,26 @@ An unofficial VR mod for Star Wars Battlefront II (2017), for **offline** Arcade
 
 Keep the extracted mod files together in their own folder. Start your OpenXR runtime and enter an offline match. Face forward, run `Loader.exe`, and press Enter at its prompt. Press End to disable the mod. Restart Battlefront before loading the DLL again.
 
+## Quest controller mappings
+
+| Quest control | Action |
+| --- | --- |
+| Left stick | Move |
+| Right stick | Look |
+| Left trigger | Aim / zoom |
+| Right trigger | Fire in gameplay / click in Battlefront menus |
+| Right A | Jump |
+| Right B | Crouch |
+| Left X | Left ability |
+| Left Y | Right ability |
+| Left X + Y | Middle ability |
+| Left stick click | Toggle sprint |
+| Right stick click | Tap to switch shoulders / hold to switch first or third person |
+| Left grip | Open or close the pause menu |
+| Aim the right controller in Battlefront menus | Move the VR cursor |
+
+Turn Speed defaults to 1500 and can be adjusted in F7.
+
 ## F7 options overlay
 
 With Battlefront focused, press F7 to open or close the overlay. Use Up/Down to select, Left/Right to change a value, and Enter to recenter headset.

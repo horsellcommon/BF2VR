@@ -1,3 +1,6 @@
+#include <MenuInput.h>
+#include <VrOptions.h>
+#include <QuestGamepad.h>
 // Copyright Ethan Porcaro
 
 // This program is free software: you can redistribute it and/or modify
@@ -207,38 +210,44 @@ void BF2Service::BuildViews(RenderView* view) {
 
 void BF2Service::GamepadUpdate(GamepadState* state) {
     std::lock_guard lock(Runtime::mutex);
-    if (!Runtime::enabled || !OpenXRService::xrRunning) return;
-    if (!isValidPtr(state)) {
+    if(!Runtime::enabled || !OpenXRService::xrRunning || !OpenXRService::xrFocused || !isValidPtr(state)) {
         return;
     }
+    using Input=ActionsService;
+    const bool active=Input::walkValue.isActive || Input::lookValue.isActive ||
+        Input::triggerValue[0].isActive || Input::triggerValue[1].isActive ||
+        Input::stickClick[0].isActive || Input::stickClick[1].isActive ||
+        Input::jumpValue.isActive || Input::crouchValue.isActive ||
+        Input::leftAbilityValue.isActive || Input::rightAbilityValue.isActive || Input::gripValue[1].isActive;
+    const auto pressed=[](const XrActionStateBoolean& action){return action.isActive && action.currentState;};
+    if(!active)return;
 
-    state->bitmask = 0x0000;
-    if (ActionsService::jumpValue.currentState) {
-        state->bitmask |= 0x0020;  // A
+    const auto buttons=QuestGamepad::Buttons(pressed(Input::jumpValue),
+        pressed(Input::stickClick[0]),pressed(Input::leftAbilityValue),
+        pressed(Input::rightAbilityValue),pressed(Input::crouchValue));
+    if(Runtime::questInputTrace) {
+        static unsigned previous=0;
+        const unsigned trace=(Input::gripValue[0].isActive && Input::gripValue[0].currentState>.8f?1u:0u) |
+            (Input::gripValue[1].isActive && Input::gripValue[1].currentState>.8f?2u:0u) | ((state->bitmask&0x80)?4u:0u);
+        if(trace!=previous) {
+            previous=trace;
+            if(trace)Logging::Log(std::format("[QUEST_INPUT] Gamepad hook leftGrip={} rightGrip={} incomingB={}",
+                (trace&1)!=0,(trace&2)!=0,(trace&4)!=0));
+        }
     }
-    if (ActionsService::rollValue.currentState) {
-        state->bitmask |= 0x0080;  // B
-    }
-    if (ActionsService::basicValue.currentState) {
-        state->bitmask |= 0x0040;  // X
-    }
-    if (ActionsService::reloadValue.currentState) {
-        state->bitmask |= 0x0010;  // Y
-    }
-    if (ActionsService::triggerValue[0].currentState > .8f) {
-        state->bitmask |= 0x0400;  // L3
-    }
-    if (ActionsService::gripValue[0].currentState > .8f) {
-        state->bitmask |= 0x10000;  // LB
-    }
-    if (ActionsService::gripValue[1].currentState > .8f) {
-        state->bitmask |= 0x20000;  // RB
-    }
-
-    state->LeftThumb.x = ActionsService::walkValue.currentState.x;
-    state->LeftThumb.y = ActionsService::walkValue.currentState.y;
-    state->RT = ActionsService::triggerValue[1].currentState;
-    state->RightThumb = {ActionsService::lookValue.currentState.x, ActionsService::lookValue.currentState.y};
+    state->bitmask=(state->bitmask&~QuestGamepad::Mask)|buttons;
+    state->A=(buttons&QuestGamepad::Jump)?1.f:0.f;
+    state->B=(buttons&QuestGamepad::Crouch)?1.f:0.f;
+    state->L3=(buttons&QuestGamepad::Sprint)?1.f:0.f;
+    state->LB=(buttons&QuestGamepad::LeftAbility)?1.f:0.f;
+    state->RB=(buttons&QuestGamepad::RightAbility)?1.f:0.f;
+    state->LT=0.f; // The Quest left trigger follows the mouse aim path.
+    state->RT=!MenuInput::GameCursorVisible() && !VrOptions::IsVisible() && Input::triggerValue[1].isActive?QuestGamepad::Trigger(Input::triggerValue[1].currentState):0.f;
+    const auto axis=[](const XrActionStateVector2f& stick)->Vec2 {
+        return stick.isActive?Vec2{QuestGamepad::Axis(stick.currentState.x),QuestGamepad::Axis(stick.currentState.y)}:Vec2{};
+    };
+    state->LeftThumb=axis(Input::walkValue);
+    state->RightThumb=Runtime::questNativeLook?axis(Input::lookValue):Vec2{};
 }
 
 namespace {

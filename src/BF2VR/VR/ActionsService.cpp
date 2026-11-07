@@ -14,6 +14,8 @@
 #include <OpenXRService.h>
 #include <vector>
 #include <Logging.h>
+#include <Runtime.h>
+#include <format>
 
 namespace BF2VR {
 int ActionsService::Initialize() {
@@ -56,7 +58,7 @@ int ActionsService::Initialize() {
         actionInfo.countSubactionPaths = 2;
         actionInfo.subactionPaths = handPaths.data();
         strcpy_s(actionInfo.actionName, "firefloat");
-        strcpy_s(actionInfo.localizedActionName, "Fire Gun");
+        strcpy_s(actionInfo.localizedActionName, "Aim / Fire");
         xr = xrCreateAction(actionSet, &actionInfo, &triggerAction);
         if (xr != XR_SUCCESS) {
             Logging::Log("[Actions] Failed to create action for trigger", xr);
@@ -73,7 +75,7 @@ int ActionsService::Initialize() {
         actionInfo.countSubactionPaths = 2;
         actionInfo.subactionPaths = handPaths.data();
         strcpy_s(actionInfo.actionName, "grip");
-        strcpy_s(actionInfo.localizedActionName, "Left Right and Middle Abilities");
+        strcpy_s(actionInfo.localizedActionName, "Grip");
         xr = xrCreateAction(actionSet, &actionInfo, &gripAction);
         if (xr != XR_SUCCESS) {
             Logging::Log("[Actions] Failed to create action for grip", xr);
@@ -81,50 +83,50 @@ int ActionsService::Initialize() {
         }
     }
 
-    // Menu click action
-    xrStringToPath(OpenXRService::xrInstance, "/user/hand/left/input/y/click", &basicPath);
+    // Left Y activates the right ability.
+    xrStringToPath(OpenXRService::xrInstance, "/user/hand/left/input/y/click", &rightAbilityPath);
     {
         XrActionCreateInfo actionInfo = { XR_TYPE_ACTION_CREATE_INFO };
         actionInfo.actionType = XR_ACTION_TYPE_BOOLEAN_INPUT;
         actionInfo.countSubactionPaths = 1;
         actionInfo.subactionPaths = &handPaths[0];
         strcpy_s(actionInfo.actionName, "basic");
-        strcpy_s(actionInfo.localizedActionName, "Basic weapon");
-        xr = xrCreateAction(actionSet, &actionInfo, &basicAction);
+        strcpy_s(actionInfo.localizedActionName, "Right Ability");
+        xr = xrCreateAction(actionSet, &actionInfo, &rightAbilityAction);
         if (xr != XR_SUCCESS) {
-            Logging::Log("[Actions] Failed to create action for basic weapon", xr);
+            Logging::Log("[Actions] Failed to create action for right ability", xr);
             return -1;
         }
     }
 
-    // X click action
-    xrStringToPath(OpenXRService::xrInstance, "/user/hand/left/input/x/click", &reloadPath);
+    // Left X activates the left ability.
+    xrStringToPath(OpenXRService::xrInstance, "/user/hand/left/input/x/click", &leftAbilityPath);
     {
         XrActionCreateInfo actionInfo = { XR_TYPE_ACTION_CREATE_INFO };
         actionInfo.actionType = XR_ACTION_TYPE_BOOLEAN_INPUT;
         actionInfo.countSubactionPaths = 1;
         actionInfo.subactionPaths = &handPaths[0];
         strcpy_s(actionInfo.actionName, "reload");
-        strcpy_s(actionInfo.localizedActionName, "Reload");
-        xr = xrCreateAction(actionSet, &actionInfo, &reloadAction);
+        strcpy_s(actionInfo.localizedActionName, "Left Ability");
+        xr = xrCreateAction(actionSet, &actionInfo, &leftAbilityAction);
         if (xr != XR_SUCCESS) {
-            Logging::Log("[Actions] Failed to create action for menu", xr);
+            Logging::Log("[Actions] Failed to create action for left ability", xr);
             return -1;
         }
     }
 
-    // Battle roll action
-    xrStringToPath(OpenXRService::xrInstance, "/user/hand/right/input/b/click", &rollPath);
+    // Right B toggles crouch.
+    xrStringToPath(OpenXRService::xrInstance, "/user/hand/right/input/b/click", &crouchPath);
     {
         XrActionCreateInfo actionInfo = { XR_TYPE_ACTION_CREATE_INFO };
         actionInfo.actionType = XR_ACTION_TYPE_BOOLEAN_INPUT;
         actionInfo.countSubactionPaths = 1;
         actionInfo.subactionPaths = &handPaths[1];
         strcpy_s(actionInfo.actionName, "roll");
-        strcpy_s(actionInfo.localizedActionName, "Battle Roll");
-        xr = xrCreateAction(actionSet, &actionInfo, &rollAction);
+        strcpy_s(actionInfo.localizedActionName, "Crouch");
+        xr = xrCreateAction(actionSet, &actionInfo, &crouchAction);
         if (xr != XR_SUCCESS) {
-            Logging::Log("[Actions] Failed to create action for battle roll", xr);
+            Logging::Log("[Actions] Failed to create action for crouch", xr);
             return -1;
         }
     }
@@ -177,6 +179,20 @@ int ActionsService::Initialize() {
         }
     }
 
+    XrActionCreateInfo stickClickInfo{XR_TYPE_ACTION_CREATE_INFO};
+    stickClickInfo.actionType=XR_ACTION_TYPE_BOOLEAN_INPUT;
+    stickClickInfo.countSubactionPaths=2;
+    stickClickInfo.subactionPaths=handPaths.data();
+    strcpy_s(stickClickInfo.actionName,"stickclick");
+    strcpy_s(stickClickInfo.localizedActionName,"Sprint / Perspective");
+    xr=xrCreateAction(actionSet,&stickClickInfo,&stickClickAction);
+    if(XR_FAILED(xr)) {Logging::Log("[Actions] Failed to create stick click action",xr);return -1;}
+    XrPath stickClicks[2]{};
+    xr=xrStringToPath(OpenXRService::xrInstance,"/user/hand/left/input/thumbstick/click",&stickClicks[0]);
+    if(XR_FAILED(xr))return -1;
+    xr=xrStringToPath(OpenXRService::xrInstance,"/user/hand/right/input/thumbstick/click",&stickClicks[1]);
+    if(XR_FAILED(xr))return -1;
+
     // Suggest interaction profile
     XrPath gripPosePath[2];
     xrStringToPath(OpenXRService::xrInstance, "/user/hand/left/input/grip/pose", &gripPosePath[0]);
@@ -214,27 +230,28 @@ int ActionsService::Initialize() {
     binding.binding = gripPaths[1];
     bindings.push_back(binding);
 
-    binding.action = basicAction;
-    binding.binding = basicPath;
+    binding.action = rightAbilityAction;
+    binding.binding = rightAbilityPath;
     bindings.push_back(binding);
 
     binding.action = walkAction;
     binding.binding = walkPath;
     bindings.push_back(binding);
 
-    binding.action = rollAction;
-    binding.binding = rollPath;
+    binding.action = crouchAction;
+    binding.binding = crouchPath;
     bindings.push_back(binding);
 
     binding.action = jumpAction;
     binding.binding = jumpPath;
     bindings.push_back(binding);
 
-    binding.action = reloadAction;
-    binding.binding = reloadPath;
+    binding.action = leftAbilityAction;
+    binding.binding = leftAbilityPath;
     bindings.push_back(binding);
 
     bindings.push_back({lookAction, lookPath});
+    for(const auto click:stickClicks)bindings.push_back({stickClickAction,click});
     // Register bindings
     XrInteractionProfileSuggestedBinding suggestedBindings = { XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING };
     suggestedBindings.interactionProfile = interactionProfilePath;
@@ -312,20 +329,24 @@ void ActionsService::SyncActions() {
             XrActionStateGetInfo getInfo = { XR_TYPE_ACTION_STATE_GET_INFO };
             getInfo.action = poseAction;
             getInfo.subactionPath = handPaths[i];
-            xr = xrGetActionStatePose(OpenXRService::xrSession, &getInfo, &pose_state);
-            if (xr != XR_SUCCESS) {
-                ResetInput(); return;
+            if(XR_SUCCEEDED(xrGetActionStatePose(OpenXRService::xrSession,&getInfo,&pose_state)) &&
+                pose_state.isActive) {
+                auto& location=handLocations[i];
+                if(XR_SUCCEEDED(xrLocateSpace(poseActionSpaces[i],OpenXRService::xrSpace,
+                    OpenXRService::xrFrameState.predictedDisplayTime,&location))) {
+                    const auto flags=location.locationFlags;
+                    handValid[i]=(flags&XR_SPACE_LOCATION_ORIENTATION_VALID_BIT) &&
+                        (flags&XR_SPACE_LOCATION_POSITION_VALID_BIT);
+                }
             }
-
-            if (!pose_state.isActive) continue;
-            handLocations[i].type = XR_TYPE_SPACE_LOCATION;
-
-            xr = xrLocateSpace(poseActionSpaces[i], OpenXRService::xrSpace, OpenXRService::xrFrameState.predictedDisplayTime, &handLocations[i]);
-            if (xr != XR_SUCCESS) {
-                ResetInput(); return;
+        }
+        {
+            XrActionStateGetInfo getInfo{XR_TYPE_ACTION_STATE_GET_INFO};
+            getInfo.action=stickClickAction;
+            getInfo.subactionPath=handPaths[i];
+            if(XR_FAILED(xrGetActionStateBoolean(OpenXRService::xrSession,&getInfo,&stickClick[i]))) {
+                ResetInput();return;
             }
-            const auto flags = handLocations[i].locationFlags;
-            handValid[i] = (flags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT) && (flags & XR_SPACE_LOCATION_POSITION_VALID_BIT);
         }
         {
             // Get controller trigger states
@@ -354,26 +375,26 @@ void ActionsService::SyncActions() {
     }
 
     {
-        // Get basic weapon button state
-        basicValue.type = XR_TYPE_ACTION_STATE_BOOLEAN;
+        // Get right ability button state
+        rightAbilityValue.type = XR_TYPE_ACTION_STATE_BOOLEAN;
 
         XrActionStateGetInfo getInfo = { XR_TYPE_ACTION_STATE_GET_INFO };
-        getInfo.action = basicAction;
+        getInfo.action = rightAbilityAction;
         getInfo.subactionPath = handPaths[0];
-        xr = xrGetActionStateBoolean(OpenXRService::xrSession, &getInfo, &basicValue);
+        xr = xrGetActionStateBoolean(OpenXRService::xrSession, &getInfo, &rightAbilityValue);
         if (xr != XR_SUCCESS) {
             ResetInput(); return;
         }
     }
 
     {
-        // Get roll button state
-        rollValue.type = XR_TYPE_ACTION_STATE_BOOLEAN;
+        // Get grenade button state
+        crouchValue.type = XR_TYPE_ACTION_STATE_BOOLEAN;
 
         XrActionStateGetInfo getInfo = { XR_TYPE_ACTION_STATE_GET_INFO };
-        getInfo.action = rollAction;
+        getInfo.action = crouchAction;
         getInfo.subactionPath = handPaths[1];
-        xr = xrGetActionStateBoolean(OpenXRService::xrSession, &getInfo, &rollValue);
+        xr = xrGetActionStateBoolean(OpenXRService::xrSession, &getInfo, &crouchValue);
         if (xr != XR_SUCCESS) {
             ResetInput(); return;
         }
@@ -393,13 +414,13 @@ void ActionsService::SyncActions() {
     }
 
     {
-        // Get reload button state
-        reloadValue.type = XR_TYPE_ACTION_STATE_BOOLEAN;
+        // Get left ability button state
+        leftAbilityValue.type = XR_TYPE_ACTION_STATE_BOOLEAN;
 
         XrActionStateGetInfo getInfo = { XR_TYPE_ACTION_STATE_GET_INFO };
-        getInfo.action = reloadAction;
+        getInfo.action = leftAbilityAction;
         getInfo.subactionPath = handPaths[0];
-        xr = xrGetActionStateBoolean(OpenXRService::xrSession, &getInfo, &reloadValue);
+        xr = xrGetActionStateBoolean(OpenXRService::xrSession, &getInfo, &leftAbilityValue);
         if (xr != XR_SUCCESS) {
             ResetInput(); return;
         }
@@ -430,13 +451,28 @@ void ActionsService::SyncActions() {
             ResetInput(); return;
         }
     }
+    if(Runtime::questInputTrace) {
+        static unsigned previous=0;
+        const auto click=[](const XrActionStateBoolean& state){return state.isActive && state.currentState;};
+        const unsigned state=(gripValue[0].isActive && gripValue[0].currentState>.8f ? 1u:0u) |
+            (gripValue[1].isActive && gripValue[1].currentState>.8f ? 2u:0u) |
+            (click(stickClick[1])?4u:0u) | (click(crouchValue)?8u:0u) |
+            (triggerValue[0].isActive && triggerValue[0].currentState>.55f?16u:0u);
+        if(state!=previous) {
+            previous=state;
+            Logging::Log(std::format("[QUEST_INPUT] LGrip={} RGrip={} RStickClick={} B={} LT={} look=({:.2f},{:.2f})",
+                (state&1)!=0,(state&2)!=0,(state&4)!=0,(state&8)!=0,(state&16)!=0,
+                lookValue.currentState.x,lookValue.currentState.y));
+        }
+    }
 }
 void ActionsService::ResetInput() {
     for (int i = 0; i < 2; ++i) {
+        stickClick[i]={XR_TYPE_ACTION_STATE_BOOLEAN};
         handValid[i] = false; handLocations[i] = {XR_TYPE_SPACE_LOCATION};
         triggerValue[i] = {XR_TYPE_ACTION_STATE_FLOAT}; gripValue[i] = {XR_TYPE_ACTION_STATE_FLOAT};
     }
-    basicValue = rollValue = jumpValue = reloadValue = {XR_TYPE_ACTION_STATE_BOOLEAN};
+    rightAbilityValue = crouchValue = jumpValue = leftAbilityValue = {XR_TYPE_ACTION_STATE_BOOLEAN};
     walkValue = lookValue = {XR_TYPE_ACTION_STATE_VECTOR2F};
 }
 void ActionsService::Uninitialize() {

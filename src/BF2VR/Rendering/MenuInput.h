@@ -7,6 +7,8 @@ struct MenuInput {
     static void Configure(bool enabled,float scale);
     static bool CanScaleMenu();
     static float Scale();
+    static bool GameCursorVisible();
+    static void UpdateQuestPointer();
     static bool PhysicalCursor(float* values);
     static void SetVisualActive(bool value);
     static void Report();

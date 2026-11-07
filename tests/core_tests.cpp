@@ -1,3 +1,5 @@
+#include <QuestPointer.h>
+#include <QuestGamepad.h>
 #include <FrameCycle.h>
 #include <Types.h>
 #include <CameraAnchor.h>
@@ -139,6 +141,50 @@ int main() {
         require(eulerFromQuat({0,0,q,q}).x > 1.5f && eulerFromQuat({0,0,-q,q}).x < -1.5f, "Euler singularity signs");
         auto offset = rotateAround({.25f,.2f,-1.f}, {}, 0);
         require(offset.x == .25f && offset.y == .2f && offset.z == -1.f, "relative HUD offset");
+        using Pad=BF2VR::QuestGamepad;
+        require(Pad::Buttons(true,true,true,true,true)==Pad::Mask,
+                "Quest jump, sprint, crouch and both abilities reach the gamepad");
+        require(Pad::Buttons(false,false,false,false,true)==Pad::Crouch &&
+                Pad::Buttons(false,false,true,true,false)==(Pad::LeftAbility|Pad::RightAbility),
+                "B crouches and X plus Y still sends the middle ability chord");
+        require(Pad::Buttons(false,false,false,false,false)==0 &&
+                Pad::Trigger(.6f)==.6f && Pad::Trigger(-1.f)==0.f && Pad::Trigger(2.f)==1.f &&
+                Pad::Axis(-.6f)==-.6f && Pad::Axis(std::numeric_limits<float>::quiet_NaN())==0.f,
+                "Quest analog controls retain valid values and sanitize invalid input");
+        BF2VR::QuestHold perspective;
+        require(!perspective.Update(true,false) && perspective.Update(true,true) &&
+                perspective.Update(true,true) && !perspective.Update(true,false),
+                "perspective key stays down until the physical stick is released");
+        require(perspective.Update(true,true) && !perspective.Update(false,true) &&
+                !perspective.Update(true,true),"focus loss releases and disarms the perspective key");
+        BF2VR::QuestPress pauseGrip;
+        require(!pauseGrip.Update(true,true) && !pauseGrip.Update(true,false) &&
+                pauseGrip.Update(true,true) && !pauseGrip.Update(true,true),
+                "left grip pause emits one event per press");
+        require(!pauseGrip.Update(false,true) && !pauseGrip.Update(true,true),
+                "holding grip across focus changes cannot open the menu");
+        BF2VR::QuestPointer pointer;
+        auto sample=pointer.Update({0,0,1,0},true,.25f);
+        require(sample && sample->x==.5f && sample->y==.5f && !sample->click,
+                "opening the menu with the trigger held cannot click");
+        sample=pointer.Update({-.4f,-.2f,.89f,0},false,.25f);
+        require(sample && sample->x>.5f && sample->y<.5f && !sample->click,
+                "controller aim moves the same screen cursor right and up");
+        sample=pointer.Update({-.4f,-.2f,.89f,0},true,.25f);
+        require(sample && sample->click,"trigger clicks once armed by release");
+        pointer.Reset();
+        sample=pointer.Update({0,0,1,0},true,.25f);
+        require(sample && !sample->click,"tracking loss disarms a held trigger");
+        BF2VR::QuestMouseLook mouseLook;
+        auto delta=mouseLook.Update(true,1.f,0.f,.01f,700.f);
+        require(delta.x==7 && delta.y==0,"right stick X turns toward the stick");
+        delta=mouseLook.Update(true,0.f,1.f,.01f,700.f);
+        require(delta.x==0 && delta.y==-7,"upward stick movement looks up");
+        require(mouseLook.Update(true,.1f,0.f,.03f,700.f).x==0 &&
+                mouseLook.Update(false,1.f,0.f,.03f,700.f).x==0,
+                "deadzone and focus loss suppress look input");
+        require(mouseLook.Update(true,1.f,0.f,1.f,700.f).x<=25,
+                "a stalled frame cannot create a large look jump");
         std::cout << "Core regression checks passed\n";
         return 0;
     } catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
